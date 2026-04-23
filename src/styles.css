@@ -1,31 +1,32 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap");
 
 :root {
-  --bg: #eef4fb;
-  --bg-accent: #d8e7f7;
-  --surface: rgba(255, 255, 255, 0.82);
-  --surface-soft: rgba(224, 235, 246, 0.72);
-  --text: #112032;
-  --muted: #5e728b;
-  --line: rgba(101, 125, 150, 0.2);
+  --bg: #f4f6f8;
+  --bg-accent: #edf2f7;
+  --surface: #ffffff;
+  --surface-soft: #eef2f6;
+  --surface-muted: #dbe3ec;
+  --text: #1f2d3d;
+  --muted: #64758a;
+  --line: #d1dae4;
   --primary: #1a80cc;
   --primary-deep: #0e5f9c;
-  --shadow: 0 20px 50px rgba(26, 58, 94, 0.12);
-  --radius-xl: 28px;
-  --radius-lg: 18px;
+  --shadow: 0 8px 24px rgba(42, 61, 85, 0.06);
+  --radius-xl: 18px;
+  --radius-lg: 14px;
   --booking-bg: #dde5ec;
   --booking-text: #445565;
-  --public-bg: #d7f2e7;
+  --public-bg: #d6efe4;
   --public-text: #176748;
-  --team-bg: #d5ebf8;
+  --team-bg: #cce7f4;
   --team-text: #145578;
-  --maintenance-bg: #ebedf0;
+  --maintenance-bg: #d8dce1;
   --maintenance-text: #6b7280;
-  --match-bg: #f7dbe2;
+  --match-bg: #f3d8e0;
   --match-text: #8c2341;
-  --school-bg: #eadcf5;
+  --school-bg: #e5d9f2;
   --school-text: #65348b;
-  --event-bg: #f6e3cc;
+  --event-bg: #f1e1c9;
   --event-text: #95540f;
 }
 
@@ -41,10 +42,7 @@ body,
 }
 
 body {
-  background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.85), transparent 28%),
-    radial-gradient(circle at bottom right, rgba(71, 145, 206, 0.12), transparent 22%),
-    linear-gradient(180deg, var(--bg-accent) 0%, var(--bg) 42%, #f7fbff 100%);
+  background: var(--bg);
   color: var(--text);
   font-family: "Inter", sans-serif;
 }
@@ -63,37 +61,60 @@ select {
 }
 
 .page-shell {
-  width: min(1640px, calc(100vw - 24px));
-  margin: 12px auto;
+  width: min(1580px, calc(100vw - 20px));
+  margin: 0 auto;
+  padding: 8px 0 24px;
 }
 
 .topbar,
 .controls,
 .schedule-panel {
-  backdrop-filter: blur(18px);
   background: var(--surface);
-  border: 1px solid rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--line);
   box-shadow: var(--shadow);
 }
 
 .topbar {
-  border-radius: var(--radius-xl);
-  padding: 32px;
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  padding: 10px 12px 14px;
+  box-shadow: none;
 }
 
 .topbar__inner {
   display: flex;
   justify-content: space-between;
   gap: 24px;
-  align-items: flex-start;
+  align-items: center;
+}
+
+.brand-block {
+  display: grid;
+  gap: 2px;
+}
+
+.brand-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-mark {
+  width: 16px;
+  height: 32px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #8a5cf6 0%, #ff5a7a 55%, #ffb347 100%);
+  transform: skew(-18deg);
 }
 
 .eyebrow {
-  margin: 0 0 8px;
+  margin: 0;
   color: var(--primary);
-  font-size: 0.8rem;
-  font-weight: 800;
-  letter-spacing: 0.16em;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
@@ -105,8 +126,8 @@ h3 {
 }
 
 h1 {
-  font-size: clamp(2rem, 3.8vw, 3.2rem);
-  line-height: 1;
+  font-size: clamp(1.6rem, 2.6vw, 2.3rem);
+  line-height: 1.1;
 }
 
 .subtitle,
@@ -115,23 +136,27 @@ h1 {
 }
 
 .subtitle {
-  margin: 10px 0 0;
-  font-size: 1rem;
+  margin: 0;
+  font-size: 0.92rem;
 }
 
 .status-banner {
-  margin: 18px 0 0;
-  padding: 12px 14px;
-  border-radius: 14px;
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
   background: rgba(17, 32, 50, 0.05);
 }
 
 .badge-panel {
   min-width: 250px;
-  padding: 18px 20px;
-  border-radius: 20px;
-  background: linear-gradient(180deg, rgba(26, 128, 204, 0.14), rgba(26, 128, 204, 0.05));
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #f7fafc;
   border: 1px solid rgba(26, 128, 204, 0.15);
+}
+
+.badge-panel--compact {
+  min-width: 210px;
 }
 
 .badge-label,
@@ -153,24 +178,24 @@ h1 {
 
 .main-content {
   display: grid;
-  gap: 18px;
-  margin-top: 18px;
+  gap: 14px;
+  margin-top: 10px;
 }
 
 .controls,
 .schedule-panel {
   border-radius: var(--radius-xl);
-  padding: 22px;
+  padding: 14px;
 }
 
 .controls {
   display: grid;
-  gap: 18px;
+  gap: 12px;
 }
 
 .week-switcher {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
 }
 
@@ -179,6 +204,10 @@ h1 {
   flex-wrap: wrap;
   gap: 8px;
   flex: 1;
+}
+
+.week-list--center {
+  justify-content: center;
 }
 
 .icon-button,
@@ -198,9 +227,9 @@ h1 {
 }
 
 .icon-button {
-  width: 44px;
-  height: 44px;
-  font-size: 1.2rem;
+  width: 34px;
+  height: 34px;
+  font-size: 0.95rem;
 }
 
 .icon-button:disabled {
@@ -209,7 +238,7 @@ h1 {
 }
 
 .secondary-button {
-  padding: 12px 16px;
+  padding: 10px 14px;
   font-weight: 600;
 }
 
@@ -222,8 +251,8 @@ h1 {
 }
 
 .week-button {
-  padding: 12px 18px;
-  background: rgba(17, 32, 50, 0.06);
+  padding: 10px 20px;
+  background: #e1e7ee;
   color: var(--muted);
   font-weight: 700;
 }
@@ -231,28 +260,40 @@ h1 {
 .week-button.is-active {
   background: linear-gradient(135deg, var(--primary), var(--primary-deep));
   color: #fff;
-  box-shadow: 0 14px 28px rgba(26, 128, 204, 0.28);
+  box-shadow: 0 8px 18px rgba(26, 128, 204, 0.26);
 }
 
 .filter-toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
-  align-items: end;
+  gap: 14px;
+  align-items: center;
+}
+
+.filter-toolbar--inline {
+  justify-content: space-between;
 }
 
 .filter-group {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .filter-group--select {
-  min-width: 220px;
+  min-width: 180px;
+}
+
+.filter-group--inline-select {
+  align-self: end;
+}
+
+.filter-group--chips {
+  flex: 1;
 }
 
 .filter-title {
   color: var(--muted);
-  font-size: 0.84rem;
+  font-size: 0.8rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -265,10 +306,10 @@ h1 {
 }
 
 .chip {
-  padding: 10px 14px;
+  padding: 8px 14px;
   font-weight: 700;
-  color: var(--muted);
-  background: rgba(17, 32, 50, 0.06);
+  color: #56687d;
+  background: transparent;
 }
 
 .chip.is-active {
@@ -277,45 +318,50 @@ h1 {
 }
 
 .select-input {
-  min-height: 46px;
-  padding: 0 16px;
-  border-radius: 14px;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 12px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.92);
+  background: #fff;
   color: var(--text);
 }
 
 .overview-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 14px;
+  gap: 12px;
 }
 
 .overview-card {
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.85);
-  border-radius: 22px;
-  padding: 18px;
-  box-shadow: 0 10px 24px rgba(26, 58, 94, 0.07);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px 18px;
+  box-shadow: none;
 }
 
 .overview-card strong {
   display: block;
-  font-size: 1.6rem;
-  margin-top: 6px;
+  font-size: 1.1rem;
+  margin-top: 4px;
 }
 
 .overview-card span {
   color: var(--muted);
-  font-size: 0.92rem;
+  font-size: 0.88rem;
 }
 
 .schedule-panel__header {
   display: flex;
   justify-content: space-between;
-  gap: 18px;
-  align-items: start;
-  margin-bottom: 16px;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.schedule-heading {
+  display: grid;
+  gap: 2px;
 }
 
 .legend {
@@ -325,15 +371,19 @@ h1 {
   justify-content: flex-end;
 }
 
+.legend--compact {
+  gap: 6px;
+}
+
 .legend-item {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: 6px;
+  padding: 7px 10px;
   border-radius: 999px;
-  background: rgba(17, 32, 50, 0.05);
+  background: #f1f4f7;
   color: var(--muted);
-  font-size: 0.84rem;
+  font-size: 0.8rem;
   font-weight: 700;
 }
 
@@ -347,8 +397,8 @@ h1 {
   display: none;
   gap: 8px;
   overflow-x: auto;
-  padding-bottom: 10px;
-  margin-bottom: 10px;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
 }
 
 .day-tab {
@@ -366,85 +416,96 @@ h1 {
 
 .schedule-grid {
   display: grid;
-  grid-template-columns: repeat(7, minmax(160px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(7, minmax(150px, 1fr));
+  gap: 8px;
 }
 
 .day-column {
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.66);
+  border-radius: 16px;
+  background: #fff;
   border: 1px solid var(--line);
   overflow: hidden;
 }
 
 .day-header {
-  padding: 14px 16px;
-  background: rgba(214, 228, 243, 0.9);
+  padding: 12px 14px;
+  background: #dbe4ee;
   border-bottom: 1px solid var(--line);
 }
 
 .day-header h3 {
-  font-size: 0.98rem;
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .day-header span {
   color: var(--muted);
-  font-size: 0.88rem;
+  font-size: 0.7rem;
 }
 
 .slot-list {
   display: grid;
-  gap: 10px;
-  padding: 14px;
+  gap: 5px;
+  padding: 8px;
 }
 
 .slot-card {
-  padding: 14px;
-  border-radius: 16px;
-  border-left: 5px solid rgba(17, 32, 50, 0.15);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.26);
+  padding: 8px 10px;
+  border-radius: 12px;
+  border-left: 2px solid rgba(17, 32, 50, 0.15);
+  box-shadow: none;
+}
+
+.slot-card--compact {
+  min-height: 0;
 }
 
 .slot-card__meta {
   display: flex;
   justify-content: space-between;
-  gap: 10px;
-  align-items: start;
+  gap: 8px;
+  align-items: center;
 }
 
 .slot-card__title {
   margin: 0;
-  font-size: 0.96rem;
-  font-weight: 800;
+  font-size: 0.74rem;
+  font-weight: 500;
+  line-height: 1.25;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .slot-card__time {
-  font-size: 0.78rem;
-  font-weight: 800;
-  opacity: 0.78;
+  font-size: 0.72rem;
+  font-weight: 500;
+  opacity: 0.85;
   white-space: nowrap;
 }
 
 .slot-card__details {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
+  gap: 6px;
+  margin-top: 6px;
 }
 
 .slot-pill {
   display: inline-flex;
-  padding: 7px 10px;
+  padding: 3px 8px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.42);
-  font-size: 0.78rem;
+  font-size: 0.66rem;
   font-weight: 700;
 }
 
 .empty-state {
-  padding: 18px 14px 20px;
+  padding: 16px 14px 18px;
   color: var(--muted);
-  font-size: 0.95rem;
+  font-size: 0.75rem;
+  line-height: 1.35;
 }
 
 .category-booking {
@@ -503,13 +564,14 @@ h1 {
   .topbar,
   .controls,
   .schedule-panel {
-    padding: 18px;
-    border-radius: 22px;
+    padding: 14px;
+    border-radius: 16px;
   }
 
   .topbar__inner,
   .schedule-panel__header {
     flex-direction: column;
+    align-items: flex-start;
   }
 
   .badge-panel {
@@ -532,6 +594,10 @@ h1 {
   .mobile-day-tabs {
     display: flex;
   }
+
+  .filter-toolbar--inline {
+    justify-content: flex-start;
+  }
 }
 
 @media (max-width: 640px) {
@@ -551,5 +617,6 @@ h1 {
 
   .week-switcher {
     align-items: stretch;
+    flex-wrap: wrap;
   }
 }

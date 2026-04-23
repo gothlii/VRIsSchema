@@ -151,18 +151,19 @@ function App() {
     <div className="page-shell">
       <header className="topbar">
         <div className="topbar__inner">
-          <div>
+          <div className="brand-block">
+            <div className="brand-row">
+              <span className="brand-mark" aria-hidden="true" />
+              <h1>Ishallsschema</h1>
+            </div>
             <p className="eyebrow">Ice Time Tamer</p>
-            <h1>Ishallsschema</h1>
-            <p className="subtitle">Visby Roma Ishall - veckovy med filter och lagfokus</p>
+            <p className="subtitle">Visby Roma Ishall - Veckoschema</p>
           </div>
 
-          <div className="badge-panel">
+          <div className="badge-panel badge-panel--compact">
             <span className="badge-label">Datakalla</span>
             <strong>{status.source === "supabase" ? "Supabase" : "Lokal fallback"}</strong>
-            <span className="badge-meta">
-              React/Vite-version redo for GitHub Pages och vidare utveckling
-            </span>
+            <span className="badge-meta">Schema redo for GitHub Pages</span>
           </div>
         </div>
         {status.error ? <p className="status-banner">{status.error}</p> : null}
@@ -181,7 +182,7 @@ function App() {
               {"<"}
             </button>
 
-            <div className="week-list" aria-label="Veckoval">
+            <div className="week-list week-list--center" aria-label="Veckoval">
               {weeks.map((week, index) => (
                 <button
                   key={week.id}
@@ -205,10 +206,17 @@ function App() {
             </button>
           </div>
 
-          <div className="filter-toolbar">
-            <div className="filter-group">
-              <span className="filter-title">Aktiviteter</span>
+          <div className="filter-toolbar filter-toolbar--inline">
+            <div className="filter-group filter-group--chips">
+              <span className="filter-title">Filter</span>
               <div className="chip-list">
+                <button
+                  type="button"
+                  className={`chip${activeCategories.size === CATEGORIES.length ? " is-active" : ""}`}
+                  onClick={resetFilters}
+                >
+                  Alla
+                </button>
                 {CATEGORIES.map((category) => (
                   <button
                     key={category.key}
@@ -222,7 +230,7 @@ function App() {
               </div>
             </div>
 
-            <label className="filter-group filter-group--select">
+            <label className="filter-group filter-group--select filter-group--inline-select">
               <span className="filter-title">Lag</span>
               <select
                 className="select-input"
@@ -237,10 +245,6 @@ function App() {
                 ))}
               </select>
             </label>
-
-            <button className="secondary-button" type="button" onClick={resetFilters}>
-              Visa allt
-            </button>
           </div>
         </section>
 
@@ -256,12 +260,12 @@ function App() {
 
         <section className="schedule-panel">
           <div className="schedule-panel__header">
-            <div>
+            <div className="schedule-heading">
               <p className="eyebrow">Schema</p>
               <h2>{`${currentWeek.label} | ${currentWeek.subtitle}`}</h2>
             </div>
 
-            <div className="legend">
+            <div className="legend legend--compact">
               {CATEGORIES.map((category) => (
                 <span key={category.key} className="legend-item">
                   <span className="legend-dot" style={{ background: category.color }} />
@@ -305,7 +309,10 @@ function App() {
                       {slots.map((slot, index) => {
                         const category = getCategoryMeta(slot.category);
                         return (
-                          <article key={`${day.key}-${slot.start}-${index}`} className={`slot-card ${category.css}`}>
+                          <article
+                            key={`${day.key}-${slot.start}-${index}`}
+                            className={`slot-card slot-card--compact ${category.css}`}
+                          >
                             <div className="slot-card__meta">
                               <p className="slot-card__title">{slot.title}</p>
                               <span className="slot-card__time">{`${slot.start}-${slot.end}`}</span>

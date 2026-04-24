@@ -35,6 +35,7 @@ type DragState =
 
 type Props = {
   day: string;
+  dateLabel?: string;
   slots: TimeSlot[];
   isAdmin?: boolean;
   onRemoveSlot?: (index: number) => void;
@@ -50,6 +51,7 @@ type Props = {
 
 export function TimelineDay({
   day,
+  dateLabel,
   slots,
   isAdmin,
   onRemoveSlot,
@@ -217,6 +219,7 @@ export function TimelineDay({
     <div className="min-w-0">
       <div className="sticky top-0 z-10 mb-2 rounded-lg bg-secondary px-4 py-3">
         <h3 className="text-sm font-bold uppercase tracking-wide text-secondary-foreground">{day}</h3>
+        {dateLabel ? <p className="mt-1 text-xs text-muted-foreground">{dateLabel}</p> : null}
       </div>
       <div
         ref={ref}

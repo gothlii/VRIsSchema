@@ -16,6 +16,7 @@ import { downloadWeekXml } from "@/lib/exportScheduleXml";
 import { TimelineDay, TIMELINE_PX_PER_MIN } from "@/components/TimelineDay";
 import { resizeSlot, moveSlot, moveSlotToDay, insertSlot, DAY_START_MIN } from "@/lib/scheduleEdit";
 import { useTheme } from "@/hooks/useTheme";
+import { compareWeekLabels, extractWeekNumber, getIsoWeek, getWeekDateLabels } from "@/lib/weekCalendar";
 import {
   deleteWeek,
   fetchWeeks as fetchRemoteWeeks,
@@ -27,25 +28,12 @@ import {
 const allCategories: SlotCategory[] = ["booking", "public", "team", "maintenance", "match", "school", "event"];
 const allTeams = ["U8", "U9", "U10", "U11", "U12", "U13", "U14", "U15", "U16", "BJ", "VR A-lag", "Oldtimers"];
 
-function getIsoWeek(date: Date): number {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-}
-
-function extractWeekNumber(label: string): number | null {
-  const m = label.match(/\d+/);
-  return m ? parseInt(m[0], 10) : null;
-}
-
 const fallbackWeeksList: WeekRow[] = weeks.map((week, index) => ({
   id: `fallback-${index + 1}`,
   label: week.label,
   data: week.data,
   sort_order: index + 1,
-})).sort((a, b) => a.sort_order - b.sort_order);
+})).sort((a, b) => compareWeekLabels(a.label, b.label));
 
 const Index = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -100,6 +88,10 @@ const Index = () => {
   const setTeamFilter = (t: TeamFilter) => updateParams({ team: t });
 
   const week = weeksList[weekIdx];
+  const weekDateLabels = useMemo(
+    () => (week ? getWeekDateLabels(week.label, days.length) : Array.from({ length: days.length }, () => "")),
+    [week],
+  );
 
   useEffect(() => {
     const loadWeeks = async () => {
@@ -113,11 +105,7 @@ const Index = () => {
         const remoteWeeks = await fetchRemoteWeeks();
         const sortedWeeks = (remoteWeeks.length > 0 ? remoteWeeks : fallbackWeeksList)
           .slice()
-          .sort((a, b) => {
-            const aWeek = extractWeekNumber(a.label) ?? a.sort_order;
-            const bWeek = extractWeekNumber(b.label) ?? b.sort_order;
-            return aWeek - bWeek;
-          });
+          .sort((a, b) => compareWeekLabels(a.label, b.label));
         setWeeksList(sortedWeeks);
       } catch (error) {
         toast({
@@ -157,7 +145,7 @@ const Index = () => {
 
   const handleImport = (label: string, data: WeekSchedule, id: string, sort_order: number) => {
     const newWeek: WeekRow = { id, label, data, sort_order };
-    setWeeksList((prev) => [...prev, newWeek].sort((a, b) => a.sort_order - b.sort_order));
+    setWeeksList((prev) => [...prev, newWeek].sort((a, b) => compareWeekLabels(a.label, b.label)));
     updateParams({ w: label });
   };
 
@@ -537,6 +525,7 @@ const Index = () => {
                       <DayColumn
                         key={day}
                         day={day}
+                        dateLabel={weekDateLabels[days.indexOf(day)]}
                         slots={week.data[day] || []}
                         activeCategories={activeCategories}
                         teamFilter={teamFilter}
@@ -566,6 +555,7 @@ const Index = () => {
                     </div>
                     <DayColumn
                       day={days[selectedDay]}
+                      dateLabel={weekDateLabels[selectedDay]}
                       slots={week.data[days[selectedDay]] || []}
                       activeCategories={activeCategories}
                       teamFilter={teamFilter}
@@ -583,6 +573,7 @@ const Index = () => {
                       <TimelineDay
                         key={day}
                         day={day}
+                        dateLabel={weekDateLabels[days.indexOf(day)]}
                         slots={week.data[day] || []}
                         isAdmin={isAdmin}
                         onRemoveSlot={(idx) => handleRemoveSlot(day, idx)}
@@ -603,6 +594,7 @@ const Index = () => {
                       <DayColumn
                         key={day}
                         day={day}
+                        dateLabel={weekDateLabels[days.indexOf(day)]}
                         slots={week.data[day] || []}
                         activeCategories={activeCategories}
                         teamFilter={teamFilter}

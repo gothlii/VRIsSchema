@@ -4,6 +4,7 @@ import { ScheduleSlot } from "./ScheduleSlot";
 
 type Props = {
   day: string;
+  dateLabel?: string;
   slots: TimeSlot[];
   activeCategories: Set<SlotCategory>;
   teamFilter?: TeamFilter;
@@ -28,7 +29,7 @@ function matchesTeamFilter(activity: string, team: string): boolean {
   return regex.test(upper);
 }
 
-export function DayColumn({ day, slots, activeCategories, teamFilter, isAdmin, onRemoveSlot, onRenameSlot, onChangeCategory }: Props) {
+export function DayColumn({ day, dateLabel, slots, activeCategories, teamFilter, isAdmin, onRemoveSlot, onRenameSlot, onChangeCategory }: Props) {
   const filtered = slots
     .map((slot, originalIndex) => ({ slot, originalIndex }))
     .filter(({ slot }) => {
@@ -45,6 +46,7 @@ export function DayColumn({ day, slots, activeCategories, teamFilter, isAdmin, o
         <h3 className="text-sm font-bold tracking-wide text-secondary-foreground uppercase">
           {day}
         </h3>
+        {dateLabel ? <p className="mt-1 text-xs text-muted-foreground">{dateLabel}</p> : null}
       </div>
       <div className="flex flex-col gap-1">
         {filtered.map(({ slot, originalIndex }, i) => (

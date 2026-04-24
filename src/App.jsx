@@ -2,8 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { loadSchedule } from "./lib/scheduleStore";
 import { CATEGORIES, DAYS } from "./data/defaultSchedule";
 
-const NON_TEAM_CATEGORIES = CATEGORIES.filter((category) => category.key !== "team");
-
 function durationInHours(start, end) {
   const [startHour, startMinute] = start.split(":").map(Number);
   const [endHour, endMinute] = end.split(":").map(Number);
@@ -35,22 +33,10 @@ function App() {
   const [weeks, setWeeks] = useState([]);
   const [status, setStatus] = useState({ loading: true, error: "", source: "local" });
   const [weekIndex, setWeekIndex] = useState(0);
-  const [theme, setTheme] = useState(() => {
-    if (typeof window === "undefined") {
-      return "light";
-    }
-
-    const storedTheme = window.localStorage.getItem("ice-time-theme");
-    if (storedTheme === "light" || storedTheme === "dark") {
-      return storedTheme;
-    }
-
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  });
   const [activeCategories, setActiveCategories] = useState(() =>
-    new Set(NON_TEAM_CATEGORIES.map((category) => category.key))
+    new Set(CATEGORIES.map((category) => category.key))
   );
-  const [teamTrainingFilter, setTeamTrainingFilter] = useState("");
+  const [teamFilter, setTeamFilter] = useState("");
   const [mobileDay, setMobileDay] = useState(DAYS[0].key);
 
   useEffect(() => {
@@ -94,11 +80,6 @@ function App() {
     }
   }, [weekIndex, weeks.length]);
 
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    window.localStorage.setItem("ice-time-theme", theme);
-  }, [theme]);
-
   const currentWeek = weeks[weekIndex];
   const teams = useMemo(() => collectTeams(weeks), [weeks]);
 
@@ -108,17 +89,15 @@ function App() {
     }
 
     return (currentWeek.days[dayKey] || []).filter((slot) => {
-      if (slot.category === "team") {
-        return !teamTrainingFilter || slot.team === teamTrainingFilter;
-      }
-
-      return activeCategories.has(slot.category);
+      const categoryAllowed = activeCategories.has(slot.category);
+      const teamAllowed = !teamFilter || slot.team === teamFilter;
+      return categoryAllowed && teamAllowed;
     });
   };
 
   const visibleSlotsForWeek = useMemo(
     () => DAYS.flatMap((day) => visibleSlotsForDay(day.key)),
-    [currentWeek, activeCategories, teamTrainingFilter]
+    [currentWeek, activeCategories, teamFilter]
   );
 
   const overviewCards = useMemo(() => {
@@ -156,8 +135,8 @@ function App() {
   }
 
   function resetFilters() {
-    setActiveCategories(new Set(NON_TEAM_CATEGORIES.map((category) => category.key)));
-    setTeamTrainingFilter("");
+    setActiveCategories(new Set(CATEGORIES.map((category) => category.key)));
+    setTeamFilter("");
   }
 
   if (status.loading) {
@@ -186,15 +165,6 @@ function App() {
             <strong>{status.source === "supabase" ? "Supabase" : "Lokal fallback"}</strong>
             <span className="badge-meta">Schema redo for GitHub Pages</span>
           </div>
-
-          <button
-            className="theme-toggle"
-            type="button"
-            onClick={() => setTheme((currentTheme) => (currentTheme === "dark" ? "light" : "dark"))}
-            aria-label="Byt tema"
-          >
-            {theme === "dark" ? "Light mode" : "Dark mode"}
-          </button>
         </div>
         {status.error ? <p className="status-banner">{status.error}</p> : null}
       </header>
@@ -242,16 +212,12 @@ function App() {
               <div className="chip-list">
                 <button
                   type="button"
-                  className={`chip${
-                    activeCategories.size === NON_TEAM_CATEGORIES.length && !teamTrainingFilter
-                      ? " is-active"
-                      : ""
-                  }`}
+                  className={`chip${activeCategories.size === CATEGORIES.length ? " is-active" : ""}`}
                   onClick={resetFilters}
                 >
                   Alla
                 </button>
-                {NON_TEAM_CATEGORIES.map((category) => (
+                {CATEGORIES.map((category) => (
                   <button
                     key={category.key}
                     type="button"
@@ -265,13 +231,13 @@ function App() {
             </div>
 
             <label className="filter-group filter-group--select filter-group--inline-select">
-              <span className="filter-title">Lagtraning</span>
+              <span className="filter-title">Lag</span>
               <select
                 className="select-input"
-                value={teamTrainingFilter}
-                onChange={(event) => setTeamTrainingFilter(event.target.value)}
+                value={teamFilter}
+                onChange={(event) => setTeamFilter(event.target.value)}
               >
-                <option value="">Alla lagtraningar</option>
+                <option value="">Alla lag</option>
                 {teams.map((team) => (
                   <option key={team} value={team}>
                     {team}
@@ -352,8 +318,8 @@ function App() {
                               <span className="slot-card__time">{`${slot.start}-${slot.end}`}</span>
                             </div>
                             <div className="slot-card__details">
-                              {slot.team ? <span className="slot-pill slot-pill--team">{slot.team}</span> : null}
-                              {!slot.team ? <span className="slot-pill">{category.label}</span> : null}
+                              <span className="slot-pill">{category.label}</span>
+                              {slot.team ? <span className="slot-pill">{slot.team}</span> : null}
                             </div>
                           </article>
                         );

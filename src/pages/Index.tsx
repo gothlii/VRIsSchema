@@ -96,6 +96,17 @@ const Index = () => {
     () => (week ? getCurrentDayIndexForWeek(week.label, days.length) : null),
     [week],
   );
+  const visibleWeekRange = useMemo(() => {
+    if (!isMobile || weeksList.length <= 3) {
+      return weeksList.map((entry, index) => ({ entry, index }));
+    }
+
+    const start = Math.max(0, Math.min(weekIdx - 1, weeksList.length - 3));
+    return weeksList.slice(start, start + 3).map((entry, offset) => ({
+      entry,
+      index: start + offset,
+    }));
+  }, [isMobile, weekIdx, weeksList]);
 
   useEffect(() => {
     const loadWeeks = async () => {
@@ -423,7 +434,7 @@ const Index = () => {
                     >
                       <ChevronLeft className="h-4 w-4" />
                     </button>
-                    {weeksList.map((w, i) => {
+                    {visibleWeekRange.map(({ entry: w, index: i }) => {
                       return (
                         <div key={w.id} className="relative flex items-center group">
                           <button
@@ -489,15 +500,19 @@ const Index = () => {
                   Exportera XML
                 </button>
               )}
-              <button
-                onClick={toggleTheme}
-                className="flex items-center gap-1 rounded-md bg-secondary px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-                title="Vaxla mellan ljust och morkt lage"
-              >
-                {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-                {theme === "dark" ? "Ljust lage" : "Dark mode"}
-              </button>
-              <AdminButton />
+              {!isMobile ? (
+                <>
+                  <button
+                    onClick={toggleTheme}
+                    className="flex items-center gap-1 rounded-md bg-secondary px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    title="Vaxla mellan ljust och morkt lage"
+                  >
+                    {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                    {theme === "dark" ? "Ljust lage" : "Dark mode"}
+                  </button>
+                  <AdminButton />
+                </>
+              ) : null}
             </div>
           </div>
           <div className="mt-4">
@@ -551,7 +566,9 @@ const Index = () => {
                           className={`flex-1 min-w-0 rounded-md px-2 py-2 text-xs font-bold uppercase transition-all ${
                             selectedDay === i
                               ? "bg-primary text-primary-foreground shadow-lg shadow-primary/25"
-                              : "text-muted-foreground hover:text-foreground"
+                              : currentDayIndex === i
+                                ? "bg-primary/15 text-primary ring-1 ring-primary/30"
+                                : "text-muted-foreground hover:text-foreground"
                           }`}
                         >
                           {day.slice(0, 3)}
@@ -615,6 +632,20 @@ const Index = () => {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {isMobile ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              onClick={toggleTheme}
+              className="flex items-center gap-1 rounded-md bg-secondary px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+              title="Vaxla mellan ljust och morkt lage"
+            >
+              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              {theme === "dark" ? "Ljust lage" : "Dark mode"}
+            </button>
+            <AdminButton />
+          </div>
+        ) : null}
       </main>
     </div>
   );

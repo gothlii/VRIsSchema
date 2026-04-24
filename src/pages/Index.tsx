@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { days, type SlotCategory, type WeekSchedule, type TimeSlot } from "@/data/schedule";
+import { days, weeks, type SlotCategory, type WeekSchedule, type TimeSlot } from "@/data/schedule";
 import { DayColumn } from "@/components/DayColumn";
 import { type TeamFilter } from "@/components/Legend";
 import { Legend } from "@/components/Legend";
@@ -42,6 +42,13 @@ type WeekRow = {
   data: WeekSchedule;
   sort_order: number;
 };
+
+const fallbackWeeksList = weeks.map((week, index) => ({
+  id: `fallback-${index + 1}`,
+  label: week.label,
+  data: week.data,
+  sort_order: index + 1,
+}));
 
 const Index = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -100,6 +107,12 @@ const Index = () => {
   // Load weeks from database
   useEffect(() => {
     const fetchWeeks = async () => {
+      if (!supabase) {
+        setWeeksList(fallbackWeeksList);
+        setLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from("weeks")
         .select("*")
@@ -107,6 +120,8 @@ const Index = () => {
 
       if (error) {
         toast({ title: "Kunde inte ladda schemat", description: error.message, variant: "destructive" });
+        setWeeksList(fallbackWeeksList);
+        setLoading(false);
         return;
       }
 
@@ -148,6 +163,7 @@ const Index = () => {
   };
 
   const handleRemove = async (i: number) => {
+    if (!supabase) return;
     if (weeksList.length <= 1) return;
     const weekToRemove = weeksList[i];
     const { error } = await supabase.from("weeks").delete().eq("id", weekToRemove.id);
@@ -167,6 +183,7 @@ const Index = () => {
   };
 
   const handleRemoveSlot = useCallback(async (day: string, slotIndex: number) => {
+    if (!supabase) return;
     const currentWeek = weeksList[weekIdx];
     if (!currentWeek) return;
 
@@ -224,6 +241,7 @@ const Index = () => {
   }, [weekIdx, weeksList]);
 
   const handleRenameSlot = useCallback(async (day: string, slotIndex: number, newActivity: string) => {
+    if (!supabase) return;
     const currentWeek = weeksList[weekIdx];
     if (!currentWeek) return;
     const daySlots = [...(currentWeek.data[day] || [])];
@@ -249,6 +267,7 @@ const Index = () => {
   }, [weekIdx, weeksList]);
 
   const handleChangeCategory = useCallback(async (day: string, slotIndex: number, newCategory: SlotCategory) => {
+    if (!supabase) return;
     const currentWeek = weeksList[weekIdx];
     if (!currentWeek) return;
     const daySlots = [...(currentWeek.data[day] || [])];
@@ -275,6 +294,7 @@ const Index = () => {
 
   // Persist a full data update (used by timeline drag/resize)
   const persistWeekData = useCallback(async (newData: WeekSchedule, recordUndo = true) => {
+    if (!supabase) return;
     const currentWeek = weeksList[weekIdx];
     if (!currentWeek) return;
     if (recordUndo) {

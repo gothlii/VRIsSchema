@@ -37,6 +37,7 @@ type Props = {
   day: string;
   slots: TimeSlot[];
   isAdmin?: boolean;
+  onRemoveSlot?: (index: number) => void;
   onResize: (index: number, newStartMin: number, newEndMin: number) => void;
   onMove: (index: number, newStartMin: number) => void;
   onMoveToDay?: (index: number, targetDay: string, newStartMin: number) => void;
@@ -51,6 +52,7 @@ export function TimelineDay({
   day,
   slots,
   isAdmin,
+  onRemoveSlot,
   onResize,
   onMove,
   onMoveToDay,
@@ -335,6 +337,19 @@ export function TimelineDay({
                   )}
                 </div>
                 <div className="flex shrink-0 items-start gap-1">
+                  {isAdmin && !isEditing && onRemoveSlot && (
+                    <button
+                      className="rounded bg-destructive/15 p-1 text-destructive hover:bg-destructive/25"
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemoveSlot(i);
+                      }}
+                      title="Ta bort pass och gor tiden bokningsbar"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
                   {isAdmin && !isEditing && (
                     <button
                       className="rounded bg-background/50 p-1 text-foreground/80 hover:bg-background/80"

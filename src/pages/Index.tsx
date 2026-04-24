@@ -45,7 +45,7 @@ const fallbackWeeksList: WeekRow[] = weeks.map((week, index) => ({
   label: week.label,
   data: week.data,
   sort_order: index + 1,
-}));
+})).sort((a, b) => a.sort_order - b.sort_order);
 
 const Index = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -111,7 +111,14 @@ const Index = () => {
 
       try {
         const remoteWeeks = await fetchRemoteWeeks();
-        setWeeksList(remoteWeeks.length > 0 ? remoteWeeks : fallbackWeeksList);
+        const sortedWeeks = (remoteWeeks.length > 0 ? remoteWeeks : fallbackWeeksList)
+          .slice()
+          .sort((a, b) => {
+            const aWeek = extractWeekNumber(a.label) ?? a.sort_order;
+            const bWeek = extractWeekNumber(b.label) ?? b.sort_order;
+            return aWeek - bWeek;
+          });
+        setWeeksList(sortedWeeks);
       } catch (error) {
         toast({
           title: "Kunde inte ladda schemat",
@@ -126,6 +133,15 @@ const Index = () => {
 
     loadWeeks();
   }, []);
+
+  useEffect(() => {
+    if (weekParam || weeksList.length === 0) return;
+    const currentIso = getIsoWeek(new Date());
+    const currentWeek = weeksList.find((entry) => extractWeekNumber(entry.label) === currentIso) ?? weeksList[0];
+    if (currentWeek) {
+      updateParams({ w: currentWeek.label });
+    }
+  }, [weekParam, weeksList, updateParams]);
 
   const toggleCategory = (cat: SlotCategory) => {
     if (activeCategories.size === 1 && activeCategories.has(cat)) {
@@ -402,33 +418,6 @@ const Index = () => {
             </div>
             <div className="flex items-center gap-2">
               {(() => {
-                const currentIso = getIsoWeek(new Date());
-                const primaryIdxs: number[] = [];
-                const currentWeekIdx = weeksList.findIndex((w) => extractWeekNumber(w.label) === currentIso);
-                const nextWeekIdx = weeksList.findIndex((w) => extractWeekNumber(w.label) === currentIso + 1);
-                if (currentWeekIdx >= 0) primaryIdxs.push(currentWeekIdx);
-                if (nextWeekIdx >= 0) primaryIdxs.push(nextWeekIdx);
-                if (primaryIdxs.length < 2) {
-                  const upcomingIdxs = weeksList
-                    .map((w, idx) => ({ idx, num: extractWeekNumber(w.label) }))
-                    .filter((x) => x.num !== null && x.num >= currentIso && !primaryIdxs.includes(x.idx))
-                    .sort((a, b) => a.num! - b.num!)
-                    .map((x) => x.idx);
-                  for (const idx of upcomingIdxs) {
-                    if (primaryIdxs.length >= 2) break;
-                    primaryIdxs.push(idx);
-                  }
-                  if (primaryIdxs.length === 0 && weeksList.length > 0) {
-                    const sortedDesc = [...weeksList.keys()].sort(
-                      (a, b) => (extractWeekNumber(weeksList[b].label) ?? 0) - (extractWeekNumber(weeksList[a].label) ?? 0),
-                    );
-                    primaryIdxs.push(sortedDesc[0]);
-                    if (sortedDesc.length > 1) primaryIdxs.push(sortedDesc[1]);
-                  }
-                }
-
-                primaryIdxs.sort((a, b) => (extractWeekNumber(weeksList[a].label) ?? 0) - (extractWeekNumber(weeksList[b].label) ?? 0));
-                const isPrimary = primaryIdxs.includes(weekIdx);
                 const canPrev = weekIdx > 0;
                 const canNext = weekIdx < weeksList.length - 1;
 
@@ -442,8 +431,7 @@ const Index = () => {
                     >
                       <ChevronLeft className="h-4 w-4" />
                     </button>
-                    {primaryIdxs.map((i) => {
-                      const w = weeksList[i];
+                    {weeksList.map((w, i) => {
                       return (
                         <div key={w.id} className="relative flex items-center group">
                           <button
@@ -468,22 +456,6 @@ const Index = () => {
                         </div>
                       );
                     })}
-                    {!isPrimary && week && (
-                      <div className="relative flex items-center group">
-                        <span className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/25">
-                          {week.label}
-                        </span>
-                        {isAdmin && hasRemoteStore && weeksList.length > 1 && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleRemove(weekIdx); }}
-                            className="ml-0.5 rounded-full p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
-                            title="Ta bort vecka"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        )}
-                      </div>
-                    )}
                     <button
                       onClick={() => canNext && setWeekIdx(weekIdx + 1)}
                       disabled={!canNext}
@@ -613,6 +585,7 @@ const Index = () => {
                         day={day}
                         slots={week.data[day] || []}
                         isAdmin={isAdmin}
+                        onRemoveSlot={(idx) => handleRemoveSlot(day, idx)}
                         onResize={(idx, s, e) => handleResizeSlot(day, idx, s, e)}
                         onMove={(idx, s) => handleMoveSlot(day, idx, s)}
                         onMoveToDay={(idx, toDay, s) => handleMoveSlotToDay(day, idx, toDay, s)}

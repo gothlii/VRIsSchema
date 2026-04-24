@@ -1,0 +1,134 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 20% 97%;
+    --foreground: 210 30% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 210 30% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 210 30% 10%;
+
+    --primary: 199 89% 40%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 18% 88%;
+    --secondary-foreground: 210 25% 20%;
+
+    --muted: 210 15% 90%;
+    --muted-foreground: 210 12% 38%;
+
+    --accent: 199 70% 38%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 210 18% 80%;
+    --input: 210 18% 80%;
+    --ring: 199 89% 40%;
+
+    --radius: 0.75rem;
+
+    /* Schedule-specific tokens – light */
+    --schedule-booking: 210 12% 88%;
+    --schedule-booking-text: 210 15% 35%;
+    --schedule-public: 160 40% 82%;
+    --schedule-public-text: 160 55% 20%;
+    --schedule-team: 199 50% 82%;
+    --schedule-team-text: 199 65% 18%;
+    --schedule-maintenance: 210 8% 85%;
+    --schedule-maintenance-text: 210 10% 42%;
+    --schedule-match: 350 50% 88%;
+    --schedule-match-text: 350 65% 28%;
+    --schedule-school: 270 35% 88%;
+    --schedule-school-text: 270 50% 25%;
+    --schedule-event: 35 55% 85%;
+    --schedule-event-text: 35 70% 22%;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 210 30% 8%;
+    --foreground: 210 20% 92%;
+
+    --card: 210 25% 12%;
+    --card-foreground: 210 20% 92%;
+
+    --popover: 210 25% 12%;
+    --popover-foreground: 210 20% 92%;
+
+    --primary: 199 89% 48%;
+    --primary-foreground: 210 30% 8%;
+
+    --secondary: 210 20% 18%;
+    --secondary-foreground: 210 20% 85%;
+
+    --muted: 210 20% 15%;
+    --muted-foreground: 210 15% 55%;
+
+    --accent: 199 70% 35%;
+    --accent-foreground: 210 20% 95%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 210 20% 20%;
+    --input: 210 20% 20%;
+    --ring: 199 89% 48%;
+
+    /* Schedule-specific tokens – dark */
+    --schedule-booking: 210 20% 18%;
+    --schedule-booking-text: 210 15% 45%;
+    --schedule-public: 160 60% 30%;
+    --schedule-public-text: 160 60% 85%;
+    --schedule-team: 199 70% 28%;
+    --schedule-team-text: 199 80% 88%;
+    --schedule-maintenance: 210 15% 14%;
+    --schedule-maintenance-text: 210 10% 35%;
+    --schedule-match: 350 70% 40%;
+    --schedule-match-text: 350 90% 92%;
+    --schedule-school: 270 50% 35%;
+    --schedule-school-text: 270 60% 88%;
+    --schedule-event: 35 80% 40%;
+    --schedule-event-text: 35 90% 90%;
+
+    --sidebar-background: 210 25% 12%;
+    --sidebar-foreground: 210 20% 92%;
+    --sidebar-primary: 199 89% 48%;
+    --sidebar-primary-foreground: 210 30% 8%;
+    --sidebar-accent: 210 20% 18%;
+    --sidebar-accent-foreground: 210 20% 92%;
+    --sidebar-border: 210 20% 20%;
+    --sidebar-ring: 199 89% 48%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-family: 'Inter', sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Space Grotesk', sans-serif;
+  }
+}

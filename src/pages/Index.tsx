@@ -7,7 +7,7 @@ import { type TeamFilter } from "@/components/Legend";
 import { Legend } from "@/components/Legend";
 import { AdminButton } from "@/components/AdminButton";
 import { useAdmin } from "@/contexts/AdminContext";
-import { X, ChevronLeft, ChevronRight, Undo2, Download } from "lucide-react";
+import { X, ChevronLeft, ChevronRight, Undo2, Download, Moon, Sun } from "lucide-react";
 import { ImportScheduleDialog } from "@/components/ImportScheduleDialog";
 import { CopyWeekDialog } from "@/components/CopyWeekDialog";
 import { motion, AnimatePresence } from "framer-motion";
@@ -15,6 +15,7 @@ import { toast } from "@/hooks/use-toast";
 import { downloadWeekXml } from "@/lib/exportScheduleXml";
 import { TimelineDay, TIMELINE_PX_PER_MIN } from "@/components/TimelineDay";
 import { resizeSlot, moveSlot, moveSlotToDay, insertSlot, DAY_START_MIN } from "@/lib/scheduleEdit";
+import { useTheme } from "@/hooks/useTheme";
 import {
   deleteWeek,
   fetchWeeks as fetchRemoteWeeks,
@@ -52,6 +53,7 @@ const Index = () => {
   const [loading, setLoading] = useState(true);
   const { isAdmin } = useAdmin();
   const isMobile = useIsMobile();
+  const { theme, toggleTheme } = useTheme();
 
   const weekParam = searchParams.get("w");
   const weekIdx = useMemo(() => {
@@ -523,6 +525,14 @@ const Index = () => {
                   Exportera XML
                 </button>
               )}
+              <button
+                onClick={toggleTheme}
+                className="flex items-center gap-1 rounded-md bg-secondary px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                title="Vaxla mellan ljust och morkt lage"
+              >
+                {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                {theme === "dark" ? "Ljust lage" : "Dark mode"}
+              </button>
               <AdminButton />
             </div>
           </div>
@@ -602,10 +612,13 @@ const Index = () => {
                         key={day}
                         day={day}
                         slots={week.data[day] || []}
+                        isAdmin={isAdmin}
                         onResize={(idx, s, e) => handleResizeSlot(day, idx, s, e)}
                         onMove={(idx, s) => handleMoveSlot(day, idx, s)}
                         onMoveToDay={(idx, toDay, s) => handleMoveSlotToDay(day, idx, toDay, s)}
                         onCreate={(s, e) => handleCreateSlot(day, s, e)}
+                        onRenameSlot={(idx, value) => handleRenameSlot(day, idx, value)}
+                        onChangeCategory={(idx, category) => handleChangeCategory(day, idx, category)}
                         registerColumn={registerColumn}
                         getDayAtPoint={getDayAtPoint}
                       />

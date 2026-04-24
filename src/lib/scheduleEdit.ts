@@ -1,7 +1,7 @@
 import type { TimeSlot } from "@/data/schedule";
 
 export const DAY_START_MIN = 8 * 60; // 08:00
-export const DAY_END_MIN = 22 * 60 + 10; // 22:10 (allow late maintenance)
+export const DAY_END_MIN = 24 * 60; // allow pushed slots to stay visible later in the day
 export const SNAP_MIN = 5;
 export const MIN_SLOT_LEN = 5;
 
@@ -21,102 +21,132 @@ export function snap(min: number): number {
   return Math.round(min / SNAP_MIN) * SNAP_MIN;
 }
 
+function cloneSlots(slots: TimeSlot[]) {
+  return slots.map((slot) => ({ ...slot }));
+}
+
+function slotDuration(slot: TimeSlot) {
+  return toMin(slot.end) - toMin(slot.start);
+}
+
 function mergeBookable(slots: TimeSlot[]): TimeSlot[] {
+  const sorted = [...slots].sort((a, b) => toMin(a.start) - toMin(b.start));
   const out: TimeSlot[] = [];
-  for (const s of slots) {
+
+  for (const slot of sorted) {
     const last = out[out.length - 1];
-    if (last && last.activity === "BOKNINGSBAR" && s.activity === "BOKNINGSBAR" && last.end === s.start) {
-      last.end = s.end;
+    if (
+      last &&
+      last.activity === "BOKNINGSBAR" &&
+      slot.activity === "BOKNINGSBAR" &&
+      last.end === slot.start
+    ) {
+      last.end = slot.end;
     } else {
-      out.push({ ...s });
+      out.push({ ...slot });
     }
   }
+
   return out;
 }
 
-function fillGaps(slots: TimeSlot[]): TimeSlot[] {
-  // Ensure full coverage from DAY_START to last end with BOKNINGSBAR fillers
-  if (slots.length === 0) return slots;
-  const sorted = [...slots].sort((a, b) => toMin(a.start) - toMin(b.start));
-  const out: TimeSlot[] = [];
-  let cursor = Math.min(DAY_START_MIN, toMin(sorted[0].start));
-  for (const s of sorted) {
-    const sStart = toMin(s.start);
-    if (sStart > cursor) {
-      out.push({ start: toTime(cursor), end: s.start, activity: "BOKNINGSBAR" });
-    }
-    out.push({ ...s });
-    cursor = Math.max(cursor, toMin(s.end));
+function normalizeAndFillDay(slots: TimeSlot[]) {
+  const sorted = [...slots]
+    .filter((slot) => toMin(slot.end) > toMin(slot.start))
+    .sort((a, b) => toMin(a.start) - toMin(b.start));
+
+  if (sorted.length === 0) {
+    return [{ start: toTime(DAY_START_MIN), end: toTime(DAY_END_MIN), activity: "BOKNINGSBAR" }];
   }
+
+  const out: TimeSlot[] = [];
+  let cursor = DAY_START_MIN;
+
+  for (const slot of sorted) {
+    const start = Math.max(cursor, toMin(slot.start));
+    const end = Math.max(start + MIN_SLOT_LEN, toMin(slot.end));
+
+    if (start > cursor) {
+      out.push({ start: toTime(cursor), end: toTime(start), activity: "BOKNINGSBAR" });
+    }
+
+    out.push({
+      ...slot,
+      start: toTime(start),
+      end: toTime(end),
+    });
+
+    cursor = end;
+  }
+
+  if (cursor < DAY_END_MIN) {
+    out.push({ start: toTime(cursor), end: toTime(DAY_END_MIN), activity: "BOKNINGSBAR" });
+  }
+
   return mergeBookable(out);
 }
 
-/**
- * Resize one slot: change its start/end. Adjacent slots are pushed/shrunk
- * to keep coverage. If neighbour would shrink below MIN_SLOT_LEN it is removed
- * (turned into bookable / absorbed).
- */
+function pushFollowingSlots(slots: TimeSlot[], changedIndex: number) {
+  const arr = cloneSlots(slots).sort((a, b) => toMin(a.start) - toMin(b.start));
+  const changed = arr[changedIndex];
+  if (!changed) return normalizeAndFillDay(arr);
+
+  let previousEnd = toMin(changed.end);
+
+  for (let i = changedIndex + 1; i < arr.length; i += 1) {
+    const current = arr[i];
+    const duration = Math.max(MIN_SLOT_LEN, slotDuration(current));
+    const currentStart = toMin(current.start);
+
+    if (currentStart < previousEnd) {
+      current.start = toTime(previousEnd);
+      current.end = toTime(previousEnd + duration);
+    }
+
+    previousEnd = toMin(current.end);
+  }
+
+  return normalizeAndFillDay(arr);
+}
+
+function replaceWithBookable(slots: TimeSlot[], index: number) {
+  const arr = cloneSlots(slots);
+  const target = arr[index];
+  if (!target) return normalizeAndFillDay(arr);
+
+  arr[index] = {
+    start: target.start,
+    end: target.end,
+    activity: "BOKNINGSBAR",
+  };
+
+  return normalizeAndFillDay(arr);
+}
+
 export function resizeSlot(
   slots: TimeSlot[],
   index: number,
   newStartMin: number,
   newEndMin: number,
 ): TimeSlot[] {
-  const arr = slots.map((s) => ({ ...s }));
+  const arr = cloneSlots(slots).sort((a, b) => toMin(a.start) - toMin(b.start));
   const target = arr[index];
   if (!target) return slots;
 
-  let s = snap(newStartMin);
-  let e = snap(newEndMin);
-  if (e - s < MIN_SLOT_LEN) e = s + MIN_SLOT_LEN;
-  s = Math.max(DAY_START_MIN, s);
-  e = Math.min(DAY_END_MIN, e);
+  let start = Math.max(DAY_START_MIN, snap(newStartMin));
+  let end = Math.max(start + MIN_SLOT_LEN, snap(newEndMin));
 
-  target.start = toTime(s);
-  target.end = toTime(e);
-
-  // Walk left: shrink/remove neighbours that overlap new start
-  for (let i = index - 1; i >= 0; i--) {
-    const n = arr[i];
-    if (toMin(n.end) <= s) break;
-    if (toMin(n.start) >= s) {
-      // fully overlapped — remove
-      arr.splice(i, 1);
-      continue;
-    }
-    n.end = toTime(s);
-    if (toMin(n.end) - toMin(n.start) < MIN_SLOT_LEN) {
-      arr.splice(i, 1);
-    }
-    break;
+  const prev = arr[index - 1];
+  if (prev && toMin(prev.end) > start) {
+    prev.end = toTime(start);
   }
 
-  // Recompute target index after potential left-removals
-  const targetIdx = arr.indexOf(target);
+  target.start = toTime(start);
+  target.end = toTime(end);
 
-  // Walk right
-  for (let i = targetIdx + 1; i < arr.length; ) {
-    const n = arr[i];
-    if (toMin(n.start) >= e) break;
-    if (toMin(n.end) <= e) {
-      arr.splice(i, 1);
-      continue;
-    }
-    n.start = toTime(e);
-    if (toMin(n.end) - toMin(n.start) < MIN_SLOT_LEN) {
-      arr.splice(i, 1);
-      continue;
-    }
-    break;
-  }
-
-  return mergeBookable(fillGaps(arr));
+  return pushFollowingSlots(arr, index);
 }
 
-/**
- * Move a slot to a new start time within the same day, preserving its duration.
- * Other slots get pushed/shrunk under "knuffa undan" logic.
- */
 export function moveSlot(
   slots: TimeSlot[],
   index: number,
@@ -124,16 +154,12 @@ export function moveSlot(
 ): TimeSlot[] {
   const target = slots[index];
   if (!target) return slots;
-  const dur = toMin(target.end) - toMin(target.start);
-  let s = snap(newStartMin);
-  s = Math.max(DAY_START_MIN, Math.min(DAY_END_MIN - dur, s));
-  return resizeSlot(slots, index, s, s + dur);
+
+  const duration = Math.max(MIN_SLOT_LEN, slotDuration(target));
+  const start = Math.max(DAY_START_MIN, snap(newStartMin));
+  return resizeSlot(slots, index, start, start + duration);
 }
 
-/**
- * Move a slot to a different day at given start. Removes from source day,
- * inserts on target day, then runs resize/push logic on the target.
- */
 export function moveSlotToDay(
   fromSlots: TimeSlot[],
   fromIndex: number,
@@ -142,41 +168,41 @@ export function moveSlotToDay(
 ): { from: TimeSlot[]; to: TimeSlot[] } {
   const target = fromSlots[fromIndex];
   if (!target) return { from: fromSlots, to: toSlots };
-  const dur = toMin(target.end) - toMin(target.start);
 
-  // Remove from source: replace with BOKNINGSBAR over its time so coverage stays
-  const fromArr = fromSlots.map((s, i) =>
-    i === fromIndex ? { start: target.start, end: target.end, activity: "BOKNINGSBAR" } : { ...s },
+  const from = replaceWithBookable(fromSlots, fromIndex);
+  const inserted = cloneSlots(toSlots).sort((a, b) => toMin(a.start) - toMin(b.start));
+  inserted.push({ ...target });
+  inserted.sort((a, b) => toMin(a.start) - toMin(b.start));
+  const insertedIndex = inserted.findIndex(
+    (slot) =>
+      slot.activity === target.activity &&
+      slot.start === target.start &&
+      slot.end === target.end,
   );
-  const fromMerged = mergeBookable(fromArr);
 
-  // Insert into target at end first, then resize to desired window
-  const inserted = [...toSlots.map((s) => ({ ...s })), { ...target }];
-  const insertedIdx = inserted.length - 1;
-  let s = snap(newStartMin);
-  s = Math.max(DAY_START_MIN, Math.min(DAY_END_MIN - dur, s));
-  const toResized = resizeSlot(inserted, insertedIdx, s, s + dur);
+  const duration = Math.max(MIN_SLOT_LEN, slotDuration(target));
+  const start = Math.max(DAY_START_MIN, snap(newStartMin));
+  const to = resizeSlot(inserted, insertedIndex, start, start + duration);
 
-  return { from: fromMerged, to: toResized };
+  return { from, to };
 }
 
-/**
- * Insert a new slot at given range (with knuffa-undan).
- * Activity defaults to "Nytt pass". Returns the new slot index in the result.
- */
 export function insertSlot(
   slots: TimeSlot[],
   newStartMin: number,
   newEndMin: number,
   activity = "Nytt pass",
 ): TimeSlot[] {
-  let s = snap(newStartMin);
-  let e = snap(newEndMin);
-  if (e - s < MIN_SLOT_LEN) e = s + MIN_SLOT_LEN;
-  s = Math.max(DAY_START_MIN, s);
-  e = Math.min(DAY_END_MIN, e);
-  const inserted: TimeSlot = { start: toTime(s), end: toTime(e), activity };
-  const arr = [...slots.map((x) => ({ ...x })), inserted];
-  const idx = arr.length - 1;
-  return resizeSlot(arr, idx, s, e);
+  let start = Math.max(DAY_START_MIN, snap(newStartMin));
+  let end = Math.max(start + MIN_SLOT_LEN, snap(newEndMin));
+
+  const arr = cloneSlots(slots).sort((a, b) => toMin(a.start) - toMin(b.start));
+  arr.push({ start: toTime(start), end: toTime(end), activity });
+  arr.sort((a, b) => toMin(a.start) - toMin(b.start));
+
+  const index = arr.findIndex(
+    (slot) => slot.start === toTime(start) && slot.end === toTime(end) && slot.activity === activity,
+  );
+
+  return pushFollowingSlots(arr, index);
 }

@@ -1,8 +1,9 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import { type TimeSlot, type SlotCategory, getCategory } from "@/data/schedule";
 import { DAY_START_MIN, DAY_END_MIN, toMin, toTime, snap, MIN_SLOT_LEN } from "@/lib/scheduleEdit";
+import { Check, Pencil, X } from "lucide-react";
 
-const PX_PER_MIN = 1.4; // ~14h * 60 * 1.4 ≈ 1180 px tall
+const PX_PER_MIN = 1.15;
 const HOUR_LABEL_EVERY = 60;
 
 const categoryStyles: Record<SlotCategory, string> = {
@@ -15,6 +16,16 @@ const categoryStyles: Record<SlotCategory, string> = {
   event: "bg-schedule-event text-schedule-event-text border-l-2 border-l-amber-400/60",
 };
 
+const categoryOptions: SlotCategory[] = [
+  "booking",
+  "public",
+  "team",
+  "maintenance",
+  "match",
+  "school",
+  "event",
+];
+
 type DragState =
   | { kind: "move"; index: number; pointerStart: number; origStart: number; origEnd: number }
   | { kind: "resize-top"; index: number; pointerStart: number; origStart: number; origEnd: number }
@@ -25,19 +36,37 @@ type DragState =
 type Props = {
   day: string;
   slots: TimeSlot[];
+  isAdmin?: boolean;
   onResize: (index: number, newStartMin: number, newEndMin: number) => void;
   onMove: (index: number, newStartMin: number) => void;
   onMoveToDay?: (index: number, targetDay: string, newStartMin: number) => void;
   onCreate?: (newStartMin: number, newEndMin: number) => void;
+  onRenameSlot?: (index: number, newActivity: string) => void;
+  onChangeCategory?: (index: number, newCategory: SlotCategory) => void;
   registerColumn?: (day: string, el: HTMLDivElement | null) => void;
   getDayAtPoint?: (clientX: number, clientY: number) => { day: string; min: number } | null;
 };
 
-export function TimelineDay({ day, slots, onResize, onMove, onMoveToDay, onCreate, registerColumn, getDayAtPoint }: Props) {
+export function TimelineDay({
+  day,
+  slots,
+  isAdmin,
+  onResize,
+  onMove,
+  onMoveToDay,
+  onCreate,
+  onRenameSlot,
+  onChangeCategory,
+  registerColumn,
+  getDayAtPoint,
+}: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<DragState>(null);
   const [preview, setPreview] = useState<{ index: number; start: number; end: number; targetDay?: string } | null>(null);
   const [createPreview, setCreatePreview] = useState<{ start: number; end: number } | null>(null);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [draftText, setDraftText] = useState("");
+  const [draftCategory, setDraftCategory] = useState<SlotCategory>("team");
 
   useEffect(() => {
     if (registerColumn) {
@@ -46,11 +75,51 @@ export function TimelineDay({ day, slots, onResize, onMove, onMoveToDay, onCreat
     }
   }, [day, registerColumn]);
 
+  useEffect(() => {
+    if (editingIndex === null) return;
+    const slot = slots[editingIndex];
+    if (!slot) {
+      setEditingIndex(null);
+      return;
+    }
+    setDraftText(slot.activity);
+    setDraftCategory(getCategory(slot));
+  }, [editingIndex, slots]);
+
   const totalMin = DAY_END_MIN - DAY_START_MIN;
   const height = totalMin * PX_PER_MIN;
 
+  const openEditor = (index: number) => {
+    const slot = slots[index];
+    if (!slot) return;
+    setDraftText(slot.activity);
+    setDraftCategory(getCategory(slot));
+    setEditingIndex(index);
+  };
+
+  const commitEditor = () => {
+    if (editingIndex === null) return;
+    const slot = slots[editingIndex];
+    if (!slot) {
+      setEditingIndex(null);
+      return;
+    }
+
+    const nextText = draftText.trim();
+    if (nextText && nextText !== slot.activity && onRenameSlot) {
+      onRenameSlot(editingIndex, nextText);
+    }
+
+    if (draftCategory !== getCategory(slot) && onChangeCategory) {
+      onChangeCategory(editingIndex, draftCategory);
+    }
+
+    setEditingIndex(null);
+  };
+
   const onPointerDown = useCallback(
     (e: React.PointerEvent, kind: "move" | "resize-top" | "resize-bottom", index: number) => {
+      if (!isAdmin) return;
       e.preventDefault();
       e.stopPropagation();
       (e.target as Element).setPointerCapture?.(e.pointerId);
@@ -63,7 +132,7 @@ export function TimelineDay({ day, slots, onResize, onMove, onMoveToDay, onCreat
         origEnd: toMin(slot.end),
       });
     },
-    [slots],
+    [slots, isAdmin],
   );
 
   useEffect(() => {
@@ -81,31 +150,29 @@ export function TimelineDay({ day, slots, onResize, onMove, onMoveToDay, onCreat
         setCreatePreview({ start: s, end: Math.max(s + MIN_SLOT_LEN, en) });
         return;
       }
+
       const deltaPx = e.clientY - drag.pointerStart;
       const deltaMin = deltaPx / PX_PER_MIN;
 
       if (drag.kind === "move") {
-        // Cross-day support
         if (getDayAtPoint && onMoveToDay) {
           const hit = getDayAtPoint(e.clientX, e.clientY);
           if (hit && hit.day !== day) {
             const dur = drag.origEnd - drag.origStart;
-            const s = Math.max(DAY_START_MIN, Math.min(DAY_END_MIN - dur, snap(hit.min - dur / 2)));
+            const s = Math.max(DAY_START_MIN, snap(hit.min - dur / 2));
             setPreview({ index: drag.index, start: s, end: s + dur, targetDay: hit.day });
             return;
           }
         }
+
         const dur = drag.origEnd - drag.origStart;
-        let s = snap(drag.origStart + deltaMin);
-        s = Math.max(DAY_START_MIN, Math.min(DAY_END_MIN - dur, s));
+        const s = Math.max(DAY_START_MIN, snap(drag.origStart + deltaMin));
         setPreview({ index: drag.index, start: s, end: s + dur });
       } else if (drag.kind === "resize-top") {
-        let s = snap(drag.origStart + deltaMin);
-        s = Math.max(DAY_START_MIN, Math.min(drag.origEnd - MIN_SLOT_LEN, s));
+        const s = Math.max(DAY_START_MIN, Math.min(drag.origEnd - MIN_SLOT_LEN, snap(drag.origStart + deltaMin)));
         setPreview({ index: drag.index, start: s, end: drag.origEnd });
       } else if (drag.kind === "resize-bottom") {
-        let en = snap(drag.origEnd + deltaMin);
-        en = Math.max(drag.origStart + MIN_SLOT_LEN, Math.min(DAY_END_MIN, en));
+        const en = Math.max(drag.origStart + MIN_SLOT_LEN, snap(drag.origEnd + deltaMin));
         setPreview({ index: drag.index, start: drag.origStart, end: en });
       }
     };
@@ -141,7 +208,6 @@ export function TimelineDay({ day, slots, onResize, onMove, onMoveToDay, onCreat
     };
   }, [drag, preview, createPreview, onMove, onResize, onMoveToDay, onCreate, day, getDayAtPoint]);
 
-  // Hour grid lines
   const hourLines: number[] = [];
   for (let m = DAY_START_MIN; m <= DAY_END_MIN; m += HOUR_LABEL_EVERY) hourLines.push(m);
 
@@ -156,8 +222,7 @@ export function TimelineDay({ day, slots, onResize, onMove, onMoveToDay, onCreat
         className="relative rounded-md border border-border/40 bg-card/30"
         style={{ height, touchAction: "none" }}
         onPointerDown={(e) => {
-          if (!onCreate) return;
-          // Only fire on the background itself (not on a slot)
+          if (!isAdmin || !onCreate) return;
           if (e.target !== e.currentTarget) return;
           e.preventDefault();
           (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
@@ -169,7 +234,6 @@ export function TimelineDay({ day, slots, onResize, onMove, onMoveToDay, onCreat
           setCreatePreview({ start: s, end: s + 50 });
         }}
       >
-        {/* hour grid */}
         {hourLines.map((m) => {
           const top = (m - DAY_START_MIN) * PX_PER_MIN;
           return (
@@ -185,16 +249,17 @@ export function TimelineDay({ day, slots, onResize, onMove, onMoveToDay, onCreat
           );
         })}
 
-        {/* slots */}
         {slots.map((slot, i) => {
           const isPreviewSlot = preview?.index === i;
           const isMovingAway = isPreviewSlot && preview?.targetDay && preview.targetDay !== day;
           const startMin = isPreviewSlot && !isMovingAway ? preview!.start : toMin(slot.start);
           const endMin = isPreviewSlot && !isMovingAway ? preview!.end : toMin(slot.end);
           const top = (startMin - DAY_START_MIN) * PX_PER_MIN;
-          const h = Math.max(8, (endMin - startMin) * PX_PER_MIN);
-          const cat = getCategory(slot);
+          const h = Math.max(10, (endMin - startMin) * PX_PER_MIN);
+          const cat = editingIndex === i ? draftCategory : getCategory(slot);
           const isMaintenance = cat === "maintenance";
+          const isEditing = editingIndex === i;
+
           return (
             <div
               key={`${slot.start}-${i}`}
@@ -203,30 +268,102 @@ export function TimelineDay({ day, slots, onResize, onMove, onMoveToDay, onCreat
               } ${isPreviewSlot && !isMovingAway ? "ring-2 ring-primary z-30" : ""} ${
                 isMovingAway ? "opacity-30" : ""
               }`}
-              style={{ top, height: h, touchAction: "none", cursor: drag?.kind === "move" && drag.index === i ? "grabbing" : "grab" }}
+              style={{
+                top,
+                height: h,
+                touchAction: "none",
+                cursor: isAdmin ? (drag?.kind === "move" && drag.index === i ? "grabbing" : "grab") : "default",
+                zIndex: isEditing ? 40 : isPreviewSlot ? 30 : 1,
+              }}
               onPointerDown={(e) => onPointerDown(e, "move", i)}
             >
-              {/* top resize handle */}
-              <div
-                className="absolute left-0 right-0 top-0 h-1.5 cursor-ns-resize bg-foreground/0 hover:bg-foreground/20"
-                onPointerDown={(e) => onPointerDown(e, "resize-top", i)}
-              />
+              {isAdmin && (
+                <div
+                  className="absolute left-0 right-0 top-0 h-1.5 cursor-ns-resize bg-foreground/0 hover:bg-foreground/20"
+                  onPointerDown={(e) => onPointerDown(e, "resize-top", i)}
+                />
+              )}
+
               <div className="flex items-start justify-between gap-1 leading-tight">
-                <span className="truncate font-medium">{slot.activity}</span>
-                <span className="shrink-0 tabular-nums text-[10px] opacity-75">
-                  {toTime(startMin)}–{toTime(endMin)}
-                </span>
+                <div className="min-w-0 flex-1">
+                  {isEditing ? (
+                    <div
+                      className="flex flex-col gap-1 rounded-md bg-background/90 p-1 text-foreground shadow-lg"
+                      onPointerDown={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        value={draftText}
+                        onChange={(e) => setDraftText(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && commitEditor()}
+                        className="rounded border border-input bg-background px-1.5 py-1 text-xs outline-none"
+                        autoFocus
+                      />
+                      <select
+                        value={draftCategory}
+                        onChange={(e) => setDraftCategory(e.target.value as SlotCategory)}
+                        className="rounded border border-input bg-background px-1.5 py-1 text-xs outline-none"
+                      >
+                        {categoryOptions.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="flex items-center gap-1">
+                        <button
+                          className="rounded bg-primary px-1.5 py-1 text-[10px] text-primary-foreground"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            commitEditor();
+                          }}
+                        >
+                          <Check className="h-3 w-3" />
+                        </button>
+                        <button
+                          className="rounded bg-secondary px-1.5 py-1 text-[10px] text-secondary-foreground"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingIndex(null);
+                          }}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="truncate font-medium">{slot.activity}</span>
+                  )}
+                </div>
+                <div className="flex shrink-0 items-start gap-1">
+                  {isAdmin && !isEditing && (
+                    <button
+                      className="rounded bg-background/50 p-1 text-foreground/80 hover:bg-background/80"
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openEditor(i);
+                      }}
+                      title="Redigera pass"
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                  )}
+                  <span className="shrink-0 tabular-nums text-[10px] opacity-75">
+                    {toTime(startMin)}-{toTime(endMin)}
+                  </span>
+                </div>
               </div>
-              {/* bottom resize handle */}
-              <div
-                className="absolute bottom-0 left-0 right-0 h-1.5 cursor-ns-resize bg-foreground/0 hover:bg-foreground/20"
-                onPointerDown={(e) => onPointerDown(e, "resize-bottom", i)}
-              />
+
+              {isAdmin && (
+                <div
+                  className="absolute bottom-0 left-0 right-0 h-1.5 cursor-ns-resize bg-foreground/0 hover:bg-foreground/20"
+                  onPointerDown={(e) => onPointerDown(e, "resize-bottom", i)}
+                />
+              )}
             </div>
           );
         })}
 
-        {/* cross-day move ghost */}
         {preview?.targetDay === day && drag?.kind === "move" && (
           <div
             className="pointer-events-none absolute left-1 right-1 rounded-md ring-2 ring-primary bg-primary/20"
@@ -237,7 +374,6 @@ export function TimelineDay({ day, slots, onResize, onMove, onMoveToDay, onCreat
           />
         )}
 
-        {/* create preview */}
         {createPreview && drag?.kind === "create" && (
           <div
             className="pointer-events-none absolute left-1 right-1 rounded-md bg-primary/30 ring-2 ring-primary px-2 py-1 text-xs font-medium text-foreground"
@@ -247,7 +383,7 @@ export function TimelineDay({ day, slots, onResize, onMove, onMoveToDay, onCreat
             }}
           >
             <span className="tabular-nums">
-              {toTime(createPreview.start)}–{toTime(createPreview.end)}
+              {toTime(createPreview.start)}-{toTime(createPreview.end)}
             </span>
           </div>
         )}

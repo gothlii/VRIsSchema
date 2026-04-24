@@ -57,3 +57,26 @@ export function getWeekDateLabels(weekLabel: string, dayCount: number, now = new
     return `${date.getUTCDate()}/${date.getUTCMonth() + 1}`;
   });
 }
+
+export function getCurrentDayIndexForWeek(weekLabel: string, dayCount: number, now = new Date()): number | null {
+  const weekNumber = extractWeekNumber(weekLabel);
+  if (weekNumber === null) return null;
+
+  const year = inferIsoWeekYear(weekNumber, now);
+  const monday = getIsoWeekMonday(year, weekNumber);
+
+  for (let index = 0; index < dayCount; index += 1) {
+    const date = new Date(monday);
+    date.setUTCDate(monday.getUTCDate() + index);
+
+    if (
+      date.getUTCFullYear() === now.getFullYear() &&
+      date.getUTCMonth() === now.getMonth() &&
+      date.getUTCDate() === now.getDate()
+    ) {
+      return index;
+    }
+  }
+
+  return null;
+}

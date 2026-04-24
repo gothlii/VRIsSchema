@@ -16,7 +16,7 @@ import { downloadWeekXml } from "@/lib/exportScheduleXml";
 import { TimelineDay, TIMELINE_PX_PER_MIN } from "@/components/TimelineDay";
 import { resizeSlot, moveSlot, moveSlotToDay, insertSlot, DAY_START_MIN } from "@/lib/scheduleEdit";
 import { useTheme } from "@/hooks/useTheme";
-import { compareWeekLabels, extractWeekNumber, getIsoWeek, getWeekDateLabels } from "@/lib/weekCalendar";
+import { compareWeekLabels, extractWeekNumber, getCurrentDayIndexForWeek, getIsoWeek, getWeekDateLabels } from "@/lib/weekCalendar";
 import {
   deleteWeek,
   fetchWeeks as fetchRemoteWeeks,
@@ -90,6 +90,10 @@ const Index = () => {
   const week = weeksList[weekIdx];
   const weekDateLabels = useMemo(
     () => (week ? getWeekDateLabels(week.label, days.length) : Array.from({ length: days.length }, () => "")),
+    [week],
+  );
+  const currentDayIndex = useMemo(
+    () => (week ? getCurrentDayIndexForWeek(week.label, days.length) : null),
     [week],
   );
 
@@ -526,6 +530,7 @@ const Index = () => {
                         key={day}
                         day={day}
                         dateLabel={weekDateLabels[days.indexOf(day)]}
+                        isToday={currentDayIndex === days.indexOf(day)}
                         slots={week.data[day] || []}
                         activeCategories={activeCategories}
                         teamFilter={teamFilter}
@@ -556,6 +561,7 @@ const Index = () => {
                     <DayColumn
                       day={days[selectedDay]}
                       dateLabel={weekDateLabels[selectedDay]}
+                      isToday={currentDayIndex === selectedDay}
                       slots={week.data[days[selectedDay]] || []}
                       activeCategories={activeCategories}
                       teamFilter={teamFilter}
@@ -574,6 +580,7 @@ const Index = () => {
                         key={day}
                         day={day}
                         dateLabel={weekDateLabels[days.indexOf(day)]}
+                        isToday={currentDayIndex === days.indexOf(day)}
                         slots={week.data[day] || []}
                         isAdmin={isAdmin}
                         onRemoveSlot={(idx) => handleRemoveSlot(day, idx)}
@@ -595,6 +602,7 @@ const Index = () => {
                         key={day}
                         day={day}
                         dateLabel={weekDateLabels[days.indexOf(day)]}
+                        isToday={currentDayIndex === days.indexOf(day)}
                         slots={week.data[day] || []}
                         activeCategories={activeCategories}
                         teamFilter={teamFilter}

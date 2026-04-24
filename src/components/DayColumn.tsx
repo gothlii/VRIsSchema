@@ -5,6 +5,7 @@ import { ScheduleSlot } from "./ScheduleSlot";
 type Props = {
   day: string;
   dateLabel?: string;
+  isToday?: boolean;
   slots: TimeSlot[];
   activeCategories: Set<SlotCategory>;
   teamFilter?: TeamFilter;
@@ -29,7 +30,7 @@ function matchesTeamFilter(activity: string, team: string): boolean {
   return regex.test(upper);
 }
 
-export function DayColumn({ day, dateLabel, slots, activeCategories, teamFilter, isAdmin, onRemoveSlot, onRenameSlot, onChangeCategory }: Props) {
+export function DayColumn({ day, dateLabel, isToday, slots, activeCategories, teamFilter, isAdmin, onRemoveSlot, onRenameSlot, onChangeCategory }: Props) {
   const filtered = slots
     .map((slot, originalIndex) => ({ slot, originalIndex }))
     .filter(({ slot }) => {
@@ -42,11 +43,11 @@ export function DayColumn({ day, dateLabel, slots, activeCategories, teamFilter,
 
   return (
     <div className="min-w-0">
-      <div className="sticky top-0 z-10 mb-2 rounded-lg bg-secondary px-4 py-3">
-        <h3 className="text-sm font-bold tracking-wide text-secondary-foreground uppercase">
+      <div className={`sticky top-0 z-10 mb-2 rounded-lg px-4 py-3 ${isToday ? "bg-primary/15 ring-1 ring-primary/40" : "bg-secondary"}`}>
+        <h3 className={`text-sm font-bold tracking-wide uppercase ${isToday ? "text-primary" : "text-secondary-foreground"}`}>
           {day}
         </h3>
-        {dateLabel ? <p className="mt-1 text-xs text-muted-foreground">{dateLabel}</p> : null}
+        {dateLabel ? <p className={`mt-1 text-xs ${isToday ? "text-primary/80" : "text-muted-foreground"}`}>{dateLabel}</p> : null}
       </div>
       <div className="flex flex-col gap-1">
         {filtered.map(({ slot, originalIndex }, i) => (

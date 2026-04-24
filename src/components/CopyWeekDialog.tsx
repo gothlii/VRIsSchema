@@ -12,9 +12,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Copy } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import type { WeekSchedule } from "@/data/schedule";
+import { createWeek, hasRemoteStore } from "@/lib/weeksStore";
 
 type Props = {
   sourceLabel: string;
@@ -35,27 +35,40 @@ export function CopyWeekDialog({ sourceLabel, sourceData, existingLabels, onCopi
       toast({ title: "Ogiltigt veckonummer", description: "Ange ett tal mellan 1 och 53.", variant: "destructive" });
       return;
     }
+
     const newLabel = `Vecka ${n}`;
     if (existingLabels.includes(newLabel)) {
       toast({ title: "Veckan finns redan", description: `${newLabel} finns redan i schemat.`, variant: "destructive" });
       return;
     }
-    setBusy(true);
-    const dataClone = JSON.parse(JSON.stringify(sourceData)) as WeekSchedule;
-    const { data, error } = await supabase
-      .from("weeks")
-      .insert({ label: newLabel, sort_order: n, data: dataClone })
-      .select()
-      .single();
-    setBusy(false);
-    if (error || !data) {
-      toast({ title: "Kunde inte kopiera veckan", description: error?.message ?? "Okänt fel", variant: "destructive" });
+
+    if (!hasRemoteStore) {
+      toast({
+        title: "Firebase saknas",
+        description: "Lagg in Firebase-nycklar for att spara nya veckor.",
+        variant: "destructive",
+      });
       return;
     }
-    onCopied(data.label, data.data as unknown as WeekSchedule, data.id, data.sort_order);
-    toast({ title: "Veckan kopierades", description: `${sourceLabel} → ${newLabel}` });
-    setWeekNumber("");
-    setOpen(false);
+
+    setBusy(true);
+    const dataClone = JSON.parse(JSON.stringify(sourceData)) as WeekSchedule;
+
+    try {
+      const created = await createWeek({ label: newLabel, sort_order: n, data: dataClone });
+      onCopied(created.label, created.data, created.id, created.sort_order);
+      toast({ title: "Veckan kopierades", description: `${sourceLabel} -> ${newLabel}` });
+      setWeekNumber("");
+      setOpen(false);
+    } catch (error) {
+      toast({
+        title: "Kunde inte kopiera veckan",
+        description: error instanceof Error ? error.message : "Okant fel",
+        variant: "destructive",
+      });
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -87,7 +100,7 @@ export function CopyWeekDialog({ sourceLabel, sourceData, existingLabels, onCopi
               autoFocus
             />
             <p className="text-xs text-muted-foreground">
-              En ny vecka skapas med samma pass som {sourceLabel}. Du kan redigera den efteråt.
+              En ny vecka skapas med samma pass som {sourceLabel}. Du kan redigera den efterat.
             </p>
           </div>
           <DialogFooter>
@@ -95,7 +108,7 @@ export function CopyWeekDialog({ sourceLabel, sourceData, existingLabels, onCopi
               <Button type="button" variant="ghost">Avbryt</Button>
             </DialogClose>
             <Button type="submit" disabled={busy || !weekNumber}>
-              {busy ? "Kopierar…" : "Kopiera"}
+              {busy ? "Kopierar..." : "Kopiera"}
             </Button>
           </DialogFooter>
         </form>

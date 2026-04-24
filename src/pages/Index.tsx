@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { days, weeks, type SlotCategory, type WeekSchedule, type TimeSlot } from "@/data/schedule";
@@ -7,22 +7,25 @@ import { type TeamFilter } from "@/components/Legend";
 import { Legend } from "@/components/Legend";
 import { AdminButton } from "@/components/AdminButton";
 import { useAdmin } from "@/contexts/AdminContext";
-import { X, ChevronLeft, ChevronRight, Undo2 } from "lucide-react";
+import { X, ChevronLeft, ChevronRight, Undo2, Download } from "lucide-react";
 import { ImportScheduleDialog } from "@/components/ImportScheduleDialog";
 import { CopyWeekDialog } from "@/components/CopyWeekDialog";
 import { motion, AnimatePresence } from "framer-motion";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { downloadWeekXml } from "@/lib/exportScheduleXml";
-import { Download } from "lucide-react";
 import { TimelineDay, TIMELINE_PX_PER_MIN } from "@/components/TimelineDay";
 import { resizeSlot, moveSlot, moveSlotToDay, insertSlot, DAY_START_MIN } from "@/lib/scheduleEdit";
-import { useRef } from "react";
+import {
+  deleteWeek,
+  fetchWeeks as fetchRemoteWeeks,
+  hasRemoteStore,
+  type WeekRow,
+  updateWeekData,
+} from "@/lib/weeksStore";
 
 const allCategories: SlotCategory[] = ["booking", "public", "team", "maintenance", "match", "school", "event"];
 const allTeams = ["U8", "U9", "U10", "U11", "U12", "U13", "U14", "U15", "U16", "BJ", "VR A-lag", "Oldtimers"];
 
-// ISO week number for a given date
 function getIsoWeek(date: Date): number {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
   const dayNum = d.getUTCDay() || 7;
@@ -36,14 +39,7 @@ function extractWeekNumber(label: string): number | null {
   return m ? parseInt(m[0], 10) : null;
 }
 
-type WeekRow = {
-  id: string;
-  label: string;
-  data: WeekSchedule;
-  sort_order: number;
-};
-
-const fallbackWeeksList = weeks.map((week, index) => ({
+const fallbackWeeksList: WeekRow[] = weeks.map((week, index) => ({
   id: `fallback-${index + 1}`,
   label: week.label,
   data: week.data,
@@ -57,14 +53,13 @@ const Index = () => {
   const { isAdmin } = useAdmin();
   const isMobile = useIsMobile();
 
-  // Derive state from URL
   const weekParam = searchParams.get("w");
   const weekIdx = useMemo(() => {
     if (!weekParam || weeksList.length === 0) return 0;
     const byLabel = weeksList.findIndex((w) => w.label === weekParam);
     if (byLabel >= 0) return byLabel;
     const asNum = parseInt(weekParam, 10);
-    if (!isNaN(asNum) && asNum >= 0 && asNum < weeksList.length) return asNum;
+    if (!Number.isNaN(asNum) && asNum >= 0 && asNum < weeksList.length) return asNum;
     return 0;
   }, [weekParam, weeksList]);
 
@@ -81,7 +76,7 @@ const Index = () => {
   const dayParam = searchParams.get("d");
   const selectedDay = useMemo(() => {
     const n = dayParam ? parseInt(dayParam, 10) : 0;
-    return !isNaN(n) && n >= 0 && n < days.length ? n : 0;
+    return !Number.isNaN(n) && n >= 0 && n < days.length ? n : 0;
   }, [dayParam]);
 
   const updateParams = useCallback((updates: Record<string, string | null>) => {
@@ -104,43 +99,33 @@ const Index = () => {
 
   const week = weeksList[weekIdx];
 
-  // Load weeks from database
   useEffect(() => {
-    const fetchWeeks = async () => {
-      if (!supabase) {
+    const loadWeeks = async () => {
+      if (!hasRemoteStore) {
         setWeeksList(fallbackWeeksList);
         setLoading(false);
         return;
       }
 
-      const { data, error } = await supabase
-        .from("weeks")
-        .select("*")
-        .order("sort_order", { ascending: true });
-
-      if (error) {
-        toast({ title: "Kunde inte ladda schemat", description: error.message, variant: "destructive" });
+      try {
+        const remoteWeeks = await fetchRemoteWeeks();
+        setWeeksList(remoteWeeks.length > 0 ? remoteWeeks : fallbackWeeksList);
+      } catch (error) {
+        toast({
+          title: "Kunde inte ladda schemat",
+          description: error instanceof Error ? error.message : "Okant fel",
+          variant: "destructive",
+        });
         setWeeksList(fallbackWeeksList);
+      } finally {
         setLoading(false);
-        return;
       }
-
-      setWeeksList(
-        (data || []).map((row) => ({
-          id: row.id,
-          label: row.label,
-          data: row.data as unknown as WeekSchedule,
-          sort_order: row.sort_order,
-        }))
-      );
-      setLoading(false);
     };
 
-    fetchWeeks();
+    loadWeeks();
   }, []);
 
   const toggleCategory = (cat: SlotCategory) => {
-    // Single-select: click a category to show only that one; click it again to show all
     if (activeCategories.size === 1 && activeCategories.has(cat)) {
       updateParams({ cats: null });
     } else {
@@ -154,22 +139,22 @@ const Index = () => {
 
   const handleImport = (label: string, data: WeekSchedule, id: string, sort_order: number) => {
     const newWeek: WeekRow = { id, label, data, sort_order };
-    setWeeksList((prev) => {
-      const next = [...prev, newWeek].sort((a, b) => a.sort_order - b.sort_order);
-      return next;
-    });
-    // Navigate to the new week
+    setWeeksList((prev) => [...prev, newWeek].sort((a, b) => a.sort_order - b.sort_order));
     updateParams({ w: label });
   };
 
   const handleRemove = async (i: number) => {
-    if (!supabase) return;
-    if (weeksList.length <= 1) return;
+    if (!hasRemoteStore || weeksList.length <= 1) return;
     const weekToRemove = weeksList[i];
-    const { error } = await supabase.from("weeks").delete().eq("id", weekToRemove.id);
 
-    if (error) {
-      toast({ title: "Kunde inte ta bort veckan", description: error.message, variant: "destructive" });
+    try {
+      await deleteWeek(weekToRemove.id);
+    } catch (error) {
+      toast({
+        title: "Kunde inte ta bort veckan",
+        description: error instanceof Error ? error.message : "Okant fel",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -183,18 +168,17 @@ const Index = () => {
   };
 
   const handleRemoveSlot = useCallback(async (day: string, slotIndex: number) => {
-    if (!supabase) return;
+    if (!hasRemoteStore) return;
     const currentWeek = weeksList[weekIdx];
     if (!currentWeek) return;
 
     const daySlots = [...(currentWeek.data[day] || [])];
     const removed = daySlots[slotIndex];
-    const isMaintenance = (removed.activity || "").toLowerCase() === "spolning" || (removed.activity || "").toLowerCase().startsWith("isvård");
+    const activity = (removed?.activity || "").toLowerCase();
+    const isMaintenance = activity === "spolning" || activity.startsWith("isvard");
 
     let newDaySlots: TimeSlot[];
-
     if (isMaintenance) {
-      // Remove maintenance slot and extend the previous slot to its end time
       if (slotIndex > 0) {
         newDaySlots = daySlots.filter((_, i) => i !== slotIndex);
         newDaySlots[slotIndex - 1] = {
@@ -202,7 +186,6 @@ const Index = () => {
           end: removed.end,
         };
       } else {
-        // No previous slot — just remove it
         newDaySlots = daySlots.filter((_, i) => i !== slotIndex);
       }
     } else {
@@ -210,7 +193,6 @@ const Index = () => {
       newDaySlots = daySlots;
     }
 
-    // Merge adjacent BOKNINGSBAR slots
     const merged: TimeSlot[] = [];
     for (const slot of newDaySlots) {
       const last = merged[merged.length - 1];
@@ -223,13 +205,14 @@ const Index = () => {
 
     const newData = { ...currentWeek.data, [day]: merged };
 
-    const { error } = await supabase
-      .from("weeks")
-      .update({ data: JSON.parse(JSON.stringify(newData)) })
-      .eq("id", currentWeek.id);
-
-    if (error) {
-      toast({ title: "Kunde inte uppdatera schemat", description: error.message, variant: "destructive" });
+    try {
+      await updateWeekData(currentWeek.id, JSON.parse(JSON.stringify(newData)));
+    } catch (error) {
+      toast({
+        title: "Kunde inte uppdatera schemat",
+        description: error instanceof Error ? error.message : "Okant fel",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -241,21 +224,23 @@ const Index = () => {
   }, [weekIdx, weeksList]);
 
   const handleRenameSlot = useCallback(async (day: string, slotIndex: number, newActivity: string) => {
-    if (!supabase) return;
+    if (!hasRemoteStore) return;
     const currentWeek = weeksList[weekIdx];
     if (!currentWeek) return;
+
     const daySlots = [...(currentWeek.data[day] || [])];
     if (!daySlots[slotIndex]) return;
     daySlots[slotIndex] = { ...daySlots[slotIndex], activity: newActivity };
     const newData = { ...currentWeek.data, [day]: daySlots };
 
-    const { error } = await supabase
-      .from("weeks")
-      .update({ data: JSON.parse(JSON.stringify(newData)) })
-      .eq("id", currentWeek.id);
-
-    if (error) {
-      toast({ title: "Kunde inte spara ändringen", description: error.message, variant: "destructive" });
+    try {
+      await updateWeekData(currentWeek.id, JSON.parse(JSON.stringify(newData)));
+    } catch (error) {
+      toast({
+        title: "Kunde inte spara andringen",
+        description: error instanceof Error ? error.message : "Okant fel",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -267,21 +252,23 @@ const Index = () => {
   }, [weekIdx, weeksList]);
 
   const handleChangeCategory = useCallback(async (day: string, slotIndex: number, newCategory: SlotCategory) => {
-    if (!supabase) return;
+    if (!hasRemoteStore) return;
     const currentWeek = weeksList[weekIdx];
     if (!currentWeek) return;
+
     const daySlots = [...(currentWeek.data[day] || [])];
     if (!daySlots[slotIndex]) return;
     daySlots[slotIndex] = { ...daySlots[slotIndex], category: newCategory };
     const newData = { ...currentWeek.data, [day]: daySlots };
 
-    const { error } = await supabase
-      .from("weeks")
-      .update({ data: JSON.parse(JSON.stringify(newData)) })
-      .eq("id", currentWeek.id);
-
-    if (error) {
-      toast({ title: "Kunde inte ändra kategori", description: error.message, variant: "destructive" });
+    try {
+      await updateWeekData(currentWeek.id, JSON.parse(JSON.stringify(newData)));
+    } catch (error) {
+      toast({
+        title: "Kunde inte andra kategori",
+        description: error instanceof Error ? error.message : "Okant fel",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -292,28 +279,35 @@ const Index = () => {
     });
   }, [weekIdx, weeksList]);
 
-  // Persist a full data update (used by timeline drag/resize)
+  const undoStackRef = useRef<{ weekId: string; data: WeekSchedule }[]>([]);
+  const [undoVersion, setUndoVersion] = useState(0);
+  const currentWeekId = weeksList[weekIdx]?.id;
+
   const persistWeekData = useCallback(async (newData: WeekSchedule, recordUndo = true) => {
-    if (!supabase) return;
+    if (!hasRemoteStore) return;
     const currentWeek = weeksList[weekIdx];
     if (!currentWeek) return;
+
     if (recordUndo) {
       undoStackRef.current.push({ weekId: currentWeek.id, data: currentWeek.data });
-      // Cap stack at 50
       if (undoStackRef.current.length > 50) undoStackRef.current.shift();
       setUndoVersion((v) => v + 1);
     }
+
     setWeeksList((prev) => {
       const updated = [...prev];
       updated[weekIdx] = { ...currentWeek, data: newData };
       return updated;
     });
-    const { error } = await supabase
-      .from("weeks")
-      .update({ data: JSON.parse(JSON.stringify(newData)) })
-      .eq("id", currentWeek.id);
-    if (error) {
-      toast({ title: "Kunde inte spara ändringen", description: error.message, variant: "destructive" });
+
+    try {
+      await updateWeekData(currentWeek.id, JSON.parse(JSON.stringify(newData)));
+    } catch (error) {
+      toast({
+        title: "Kunde inte spara andringen",
+        description: error instanceof Error ? error.message : "Okant fel",
+        variant: "destructive",
+      });
     }
   }, [weekIdx, weeksList]);
 
@@ -350,17 +344,12 @@ const Index = () => {
     persistWeekData({ ...currentWeek.data, [day]: updatedDay });
   }, [weekIdx, weeksList, persistWeekData]);
 
-  // Undo stack: previous data snapshots per week
-  const undoStackRef = useRef<{ weekId: string; data: WeekSchedule }[]>([]);
-  const [undoVersion, setUndoVersion] = useState(0);
-  const currentWeekId = weeksList[weekIdx]?.id;
-  // undoVersion is referenced so the component re-renders when stack changes
   const canUndo = useMemo(
     () => undoStackRef.current.some((s) => s.weekId === currentWeekId),
     [currentWeekId, undoVersion],
   );
+
   const handleUndo = useCallback(() => {
-    // Pop most recent entry for current week
     for (let i = undoStackRef.current.length - 1; i >= 0; i--) {
       if (undoStackRef.current[i].weekId === currentWeekId) {
         const [snap] = undoStackRef.current.splice(i, 1);
@@ -371,11 +360,11 @@ const Index = () => {
     }
   }, [currentWeekId, persistWeekData]);
 
-  // Day column registry for cross-day drag hit-testing
   const dayColumnsRef = useRef<Record<string, HTMLDivElement | null>>({});
   const registerColumn = useCallback((day: string, el: HTMLDivElement | null) => {
     dayColumnsRef.current[day] = el;
   }, []);
+
   const getDayAtPoint = useCallback((clientX: number, clientY: number) => {
     for (const [day, el] of Object.entries(dayColumnsRef.current)) {
       if (!el) continue;
@@ -403,35 +392,30 @@ const Index = () => {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-                🏒 Ishallsschema
+                Ishallsschema
               </h1>
               <p className="mt-1 text-sm text-muted-foreground">
-                Visby Roma Ishall – Veckoschema
+                Visby Roma Ishall - Veckoschema
               </p>
             </div>
             <div className="flex items-center gap-2">
               {(() => {
                 const currentIso = getIsoWeek(new Date());
-                // Primary tabs: current ISO week + the one after.
-                // If neither exists, fall forward to the next two upcoming weeks
-                // (never show past weeks as default).
                 const primaryIdxs: number[] = [];
                 const currentWeekIdx = weeksList.findIndex((w) => extractWeekNumber(w.label) === currentIso);
                 const nextWeekIdx = weeksList.findIndex((w) => extractWeekNumber(w.label) === currentIso + 1);
                 if (currentWeekIdx >= 0) primaryIdxs.push(currentWeekIdx);
                 if (nextWeekIdx >= 0) primaryIdxs.push(nextWeekIdx);
                 if (primaryIdxs.length < 2) {
-                  // Find the first upcoming week (number >= currentIso) not already chosen
                   const upcomingIdxs = weeksList
                     .map((w, idx) => ({ idx, num: extractWeekNumber(w.label) }))
                     .filter((x) => x.num !== null && x.num >= currentIso && !primaryIdxs.includes(x.idx))
-                    .sort((a, b) => (a.num! - b.num!))
+                    .sort((a, b) => a.num! - b.num!)
                     .map((x) => x.idx);
                   for (const idx of upcomingIdxs) {
                     if (primaryIdxs.length >= 2) break;
                     primaryIdxs.push(idx);
                   }
-                  // Last-resort fallback: if still empty, show the two highest-numbered weeks
                   if (primaryIdxs.length === 0 && weeksList.length > 0) {
                     const sortedDesc = [...weeksList.keys()].sort(
                       (a, b) => (extractWeekNumber(weeksList[b].label) ?? 0) - (extractWeekNumber(weeksList[a].label) ?? 0),
@@ -440,18 +424,19 @@ const Index = () => {
                     if (sortedDesc.length > 1) primaryIdxs.push(sortedDesc[1]);
                   }
                 }
-                // Keep them in chronological (week-number) order
+
                 primaryIdxs.sort((a, b) => (extractWeekNumber(weeksList[a].label) ?? 0) - (extractWeekNumber(weeksList[b].label) ?? 0));
                 const isPrimary = primaryIdxs.includes(weekIdx);
                 const canPrev = weekIdx > 0;
                 const canNext = weekIdx < weeksList.length - 1;
+
                 return (
                   <div className="flex items-center gap-2 rounded-lg bg-secondary p-1">
                     <button
                       onClick={() => canPrev && setWeekIdx(weekIdx - 1)}
                       disabled={!canPrev}
                       className="rounded-md p-2 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
-                      title="Föregående vecka"
+                      title="Foregaende vecka"
                     >
                       <ChevronLeft className="h-4 w-4" />
                     </button>
@@ -469,7 +454,7 @@ const Index = () => {
                           >
                             {w.label}
                           </button>
-                          {isAdmin && weeksList.length > 1 && (
+                          {isAdmin && hasRemoteStore && weeksList.length > 1 && (
                             <button
                               onClick={(e) => { e.stopPropagation(); handleRemove(i); }}
                               className="ml-0.5 rounded-full p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
@@ -486,7 +471,7 @@ const Index = () => {
                         <span className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/25">
                           {week.label}
                         </span>
-                        {isAdmin && weeksList.length > 1 && (
+                        {isAdmin && hasRemoteStore && weeksList.length > 1 && (
                           <button
                             onClick={(e) => { e.stopPropagation(); handleRemove(weekIdx); }}
                             className="ml-0.5 rounded-full p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
@@ -501,7 +486,7 @@ const Index = () => {
                       onClick={() => canNext && setWeekIdx(weekIdx + 1)}
                       disabled={!canNext}
                       className="rounded-md p-2 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
-                      title="Nästa vecka"
+                      title="Nasta vecka"
                     >
                       <ChevronRight className="h-4 w-4" />
                     </button>
@@ -517,15 +502,15 @@ const Index = () => {
                   onCopied={handleImport}
                 />
               )}
-              {isAdmin && (
+              {isAdmin && hasRemoteStore && (
                 <button
                   onClick={handleUndo}
                   disabled={!canUndo}
                   className="flex items-center gap-1 rounded-md bg-secondary px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
-                  title="Ångra senaste ändring"
+                  title="Angra senaste andring"
                 >
                   <Undo2 className="h-4 w-4" />
-                  Ångra
+                  Angra
                 </button>
               )}
               {isAdmin && week && (
@@ -542,7 +527,13 @@ const Index = () => {
             </div>
           </div>
           <div className="mt-4">
-            <Legend activeCategories={activeCategories} onToggle={toggleCategory} onShowAll={showAllCategories} teamFilter={teamFilter} onTeamFilter={setTeamFilter} />
+            <Legend
+              activeCategories={activeCategories}
+              onToggle={toggleCategory}
+              onShowAll={showAllCategories}
+              teamFilter={teamFilter}
+              onTeamFilter={setTeamFilter}
+            />
           </div>
         </div>
       </header>
@@ -568,9 +559,9 @@ const Index = () => {
                         activeCategories={activeCategories}
                         teamFilter={teamFilter}
                         isAdmin={isAdmin}
-                        onRemoveSlot={isAdmin ? (slotIdx) => handleRemoveSlot(day, slotIdx) : undefined}
-                        onRenameSlot={isAdmin ? (slotIdx, val) => handleRenameSlot(day, slotIdx, val) : undefined}
-                        onChangeCategory={isAdmin ? (slotIdx, cat) => handleChangeCategory(day, slotIdx, cat) : undefined}
+                        onRemoveSlot={isAdmin && hasRemoteStore ? (slotIdx) => handleRemoveSlot(day, slotIdx) : undefined}
+                        onRenameSlot={isAdmin && hasRemoteStore ? (slotIdx, val) => handleRenameSlot(day, slotIdx, val) : undefined}
+                        onChangeCategory={isAdmin && hasRemoteStore ? (slotIdx, cat) => handleChangeCategory(day, slotIdx, cat) : undefined}
                       />
                     ))}
                   </div>
@@ -597,14 +588,14 @@ const Index = () => {
                       activeCategories={activeCategories}
                       teamFilter={teamFilter}
                       isAdmin={isAdmin}
-                      onRemoveSlot={isAdmin ? (slotIdx) => handleRemoveSlot(days[selectedDay], slotIdx) : undefined}
-                      onRenameSlot={isAdmin ? (slotIdx, val) => handleRenameSlot(days[selectedDay], slotIdx, val) : undefined}
-                      onChangeCategory={isAdmin ? (slotIdx, cat) => handleChangeCategory(days[selectedDay], slotIdx, cat) : undefined}
+                      onRemoveSlot={isAdmin && hasRemoteStore ? (slotIdx) => handleRemoveSlot(days[selectedDay], slotIdx) : undefined}
+                      onRenameSlot={isAdmin && hasRemoteStore ? (slotIdx, val) => handleRenameSlot(days[selectedDay], slotIdx, val) : undefined}
+                      onChangeCategory={isAdmin && hasRemoteStore ? (slotIdx, cat) => handleChangeCategory(days[selectedDay], slotIdx, cat) : undefined}
                     />
                   </div>
                 )
               ) : (
-                isAdmin ? (
+                isAdmin && hasRemoteStore ? (
                   <div className="grid grid-cols-7 gap-2">
                     {days.map((day) => (
                       <TimelineDay
@@ -623,7 +614,14 @@ const Index = () => {
                 ) : (
                   <div className="grid grid-cols-7 gap-2">
                     {days.map((day) => (
-                      <DayColumn key={day} day={day} slots={week.data[day] || []} activeCategories={activeCategories} teamFilter={teamFilter} isAdmin={isAdmin} onRemoveSlot={isAdmin ? (slotIdx) => handleRemoveSlot(day, slotIdx) : undefined} onRenameSlot={isAdmin ? (slotIdx, val) => handleRenameSlot(day, slotIdx, val) : undefined} onChangeCategory={isAdmin ? (slotIdx, cat) => handleChangeCategory(day, slotIdx, cat) : undefined} />
+                      <DayColumn
+                        key={day}
+                        day={day}
+                        slots={week.data[day] || []}
+                        activeCategories={activeCategories}
+                        teamFilter={teamFilter}
+                        isAdmin={isAdmin}
+                      />
                     ))}
                   </div>
                 )

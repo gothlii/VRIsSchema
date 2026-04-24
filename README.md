@@ -1,6 +1,6 @@
 # VRIsSchema
 
-This repository now runs the `ice-time-tamer` codebase and deploys it with GitHub Pages on every push to `main`.
+This repository runs the `ice-time-tamer` codebase and deploys it with GitHub Pages on every push to `main`.
 
 ## Development
 
@@ -16,6 +16,19 @@ npm run dev
 ```bash
 npm run build
 ```
+
+## Firebase
+
+The app reads schedule data from Firebase Firestore when these variables are configured:
+
+- `VITE_FIREBASE_API_KEY`
+- `VITE_FIREBASE_AUTH_DOMAIN`
+- `VITE_FIREBASE_PROJECT_ID`
+- `VITE_FIREBASE_STORAGE_BUCKET`
+- `VITE_FIREBASE_MESSAGING_SENDER_ID`
+- `VITE_FIREBASE_APP_ID`
+
+If Firebase is not configured, the app falls back to local demo schedule data.
 
 ## Deploy
 

@@ -1,34 +1,79 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+  type ReactNode,
+} from "react";
+import {
+  browserLocalPersistence,
+  onAuthStateChanged,
+  setPersistence,
+  signInWithEmailAndPassword,
+  signOut,
+  type User,
+} from "firebase/auth";
+import { auth } from "@/lib/firebase";
 
 type AdminContextType = {
   isAdmin: boolean;
-  login: (password: string) => boolean;
-  logout: () => void;
+  adminUser: User | null;
+  isReady: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
 };
 
 const AdminContext = createContext<AdminContextType>({
   isAdmin: false,
-  login: () => false,
-  logout: () => {},
+  adminUser: null,
+  isReady: false,
+  login: async () => {},
+  logout: async () => {},
 });
 
-const ADMIN_PASSWORD = "VisbyRoma";
-
 export function AdminProvider({ children }: { children: ReactNode }) {
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminUser, setAdminUser] = useState<User | null>(null);
+  const [isReady, setIsReady] = useState(false);
 
-  const login = useCallback((password: string) => {
-    if (password === ADMIN_PASSWORD) {
-      setIsAdmin(true);
-      return true;
+  useEffect(() => {
+    if (!auth) {
+      setIsReady(true);
+      return;
     }
-    return false;
+
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setAdminUser(user);
+      setIsReady(true);
+    });
+
+    return unsubscribe;
   }, []);
 
-  const logout = useCallback(() => setIsAdmin(false), []);
+  const login = useCallback(async (email: string, password: string) => {
+    if (!auth) {
+      throw new Error("Firebase Auth ar inte konfigurerat.");
+    }
+
+    await setPersistence(auth, browserLocalPersistence);
+    await signInWithEmailAndPassword(auth, email, password);
+  }, []);
+
+  const logout = useCallback(async () => {
+    if (!auth) return;
+    await signOut(auth);
+  }, []);
 
   return (
-    <AdminContext.Provider value={{ isAdmin, login, logout }}>
+    <AdminContext.Provider
+      value={{
+        isAdmin: Boolean(adminUser),
+        adminUser,
+        isReady,
+        login,
+        logout,
+      }}
+    >
       {children}
     </AdminContext.Provider>
   );

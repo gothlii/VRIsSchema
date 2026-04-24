@@ -6,6 +6,8 @@ import {
   getDocs,
   orderBy,
   query,
+  serverTimestamp,
+  Timestamp,
   updateDoc,
 } from "firebase/firestore";
 import type { WeekSchedule } from "@/data/schedule";
@@ -16,6 +18,7 @@ export type WeekRow = {
   label: string;
   data: WeekSchedule;
   sort_order: number;
+  created_at?: string;
 };
 
 const COLLECTION_NAME = "weeks";
@@ -32,18 +35,23 @@ function weeksCollection() {
 export async function fetchWeeks(): Promise<WeekRow[]> {
   const snapshot = await getDocs(query(weeksCollection(), orderBy("sort_order", "asc")));
   return snapshot.docs.map((entry) => {
-    const data = entry.data() as Omit<WeekRow, "id">;
+    const data = entry.data() as Omit<WeekRow, "id"> & { created_at?: Timestamp };
     return {
       id: entry.id,
       label: data.label,
       data: data.data,
       sort_order: data.sort_order,
+      created_at: data.created_at ? data.created_at.toDate().toISOString() : undefined,
     };
   });
 }
 
 export async function createWeek(input: Omit<WeekRow, "id">): Promise<WeekRow> {
-  const ref = await addDoc(weeksCollection(), input);
+  const payload = {
+    ...input,
+    created_at: serverTimestamp(),
+  };
+  const ref = await addDoc(weeksCollection(), payload);
   return { id: ref.id, ...input };
 }
 

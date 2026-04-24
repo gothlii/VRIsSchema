@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Redirecting...</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script>
+      const target = "/VRIsSchema/";
+      const path = window.location.pathname;
+      const search = window.location.search || "";
+      const hash = window.location.hash || "";
+      if (path !== target) {
+        window.location.replace(target + search + hash);
+      } else {
+        window.location.replace(target);
+      }
+    </script>
+  </head>
+  <body></body>
+</html>

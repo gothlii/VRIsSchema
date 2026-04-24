@@ -27,8 +27,9 @@ The app reads schedule data from Firebase Firestore when these variables are con
 - `VITE_FIREBASE_STORAGE_BUCKET`
 - `VITE_FIREBASE_MESSAGING_SENDER_ID`
 - `VITE_FIREBASE_APP_ID`
+- `VITE_FIREBASE_MEASUREMENT_ID`
 
-If Firebase is not configured, the app falls back to local demo schedule data.
+The repository is preconfigured for your `vrisschema` Firebase project, and these variables can be used later if you want to override the values in GitHub Actions or local development.
 
 ## Deploy
 

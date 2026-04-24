@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { loadSchedule } from "./lib/scheduleStore";
 import { CATEGORIES, DAYS } from "./data/defaultSchedule";
 
+const NON_TEAM_CATEGORIES = CATEGORIES.filter((category) => category.key !== "team");
+
 function durationInHours(start, end) {
   const [startHour, startMinute] = start.split(":").map(Number);
   const [endHour, endMinute] = end.split(":").map(Number);
@@ -46,9 +48,9 @@ function App() {
     return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   });
   const [activeCategories, setActiveCategories] = useState(() =>
-    new Set(CATEGORIES.map((category) => category.key))
+    new Set(NON_TEAM_CATEGORIES.map((category) => category.key))
   );
-  const [teamFilter, setTeamFilter] = useState("");
+  const [teamTrainingFilter, setTeamTrainingFilter] = useState("");
   const [mobileDay, setMobileDay] = useState(DAYS[0].key);
 
   useEffect(() => {
@@ -106,15 +108,17 @@ function App() {
     }
 
     return (currentWeek.days[dayKey] || []).filter((slot) => {
-      const categoryAllowed = activeCategories.has(slot.category);
-      const teamAllowed = !teamFilter || slot.team === teamFilter;
-      return categoryAllowed && teamAllowed;
+      if (slot.category === "team") {
+        return !teamTrainingFilter || slot.team === teamTrainingFilter;
+      }
+
+      return activeCategories.has(slot.category);
     });
   };
 
   const visibleSlotsForWeek = useMemo(
     () => DAYS.flatMap((day) => visibleSlotsForDay(day.key)),
-    [currentWeek, activeCategories, teamFilter]
+    [currentWeek, activeCategories, teamTrainingFilter]
   );
 
   const overviewCards = useMemo(() => {
@@ -152,8 +156,8 @@ function App() {
   }
 
   function resetFilters() {
-    setActiveCategories(new Set(CATEGORIES.map((category) => category.key)));
-    setTeamFilter("");
+    setActiveCategories(new Set(NON_TEAM_CATEGORIES.map((category) => category.key)));
+    setTeamTrainingFilter("");
   }
 
   if (status.loading) {
@@ -238,12 +242,16 @@ function App() {
               <div className="chip-list">
                 <button
                   type="button"
-                  className={`chip${activeCategories.size === CATEGORIES.length ? " is-active" : ""}`}
+                  className={`chip${
+                    activeCategories.size === NON_TEAM_CATEGORIES.length && !teamTrainingFilter
+                      ? " is-active"
+                      : ""
+                  }`}
                   onClick={resetFilters}
                 >
                   Alla
                 </button>
-                {CATEGORIES.map((category) => (
+                {NON_TEAM_CATEGORIES.map((category) => (
                   <button
                     key={category.key}
                     type="button"
@@ -257,13 +265,13 @@ function App() {
             </div>
 
             <label className="filter-group filter-group--select filter-group--inline-select">
-              <span className="filter-title">Lag</span>
+              <span className="filter-title">Lagtraning</span>
               <select
                 className="select-input"
-                value={teamFilter}
-                onChange={(event) => setTeamFilter(event.target.value)}
+                value={teamTrainingFilter}
+                onChange={(event) => setTeamTrainingFilter(event.target.value)}
               >
-                <option value="">Alla lag</option>
+                <option value="">Alla lagtraningar</option>
                 {teams.map((team) => (
                   <option key={team} value={team}>
                     {team}
@@ -344,8 +352,8 @@ function App() {
                               <span className="slot-card__time">{`${slot.start}-${slot.end}`}</span>
                             </div>
                             <div className="slot-card__details">
-                              <span className="slot-pill">{category.label}</span>
-                              {slot.team ? <span className="slot-pill">{slot.team}</span> : null}
+                              {slot.team ? <span className="slot-pill slot-pill--team">{slot.team}</span> : null}
+                              {!slot.team ? <span className="slot-pill">{category.label}</span> : null}
                             </div>
                           </article>
                         );

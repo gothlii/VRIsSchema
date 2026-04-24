@@ -322,7 +322,7 @@ h1 {
 }
 
 .filter-group--select {
-  min-width: 180px;
+  min-width: 220px;
 }
 
 .filter-group--inline-select {
@@ -360,9 +360,9 @@ h1 {
 }
 
 .select-input {
-  min-height: 40px;
-  padding: 0 14px;
-  border-radius: 12px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
   border: 1px solid var(--line);
   background: var(--surface);
   color: var(--text);
@@ -458,8 +458,8 @@ h1 {
 
 .schedule-grid {
   display: grid;
-  grid-template-columns: repeat(7, minmax(150px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(7, minmax(132px, 1fr));
+  gap: 6px;
 }
 
 .day-column {
@@ -470,31 +470,31 @@ h1 {
 }
 
 .day-header {
-  padding: 12px 14px;
+  padding: 9px 10px;
   background: var(--surface-muted);
   border-bottom: 1px solid var(--line);
 }
 
 .day-header h3 {
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .day-header span {
   color: var(--muted);
-  font-size: 0.7rem;
+  font-size: 0.64rem;
 }
 
 .slot-list {
   display: grid;
-  gap: 5px;
-  padding: 8px;
+  gap: 4px;
+  padding: 6px;
 }
 
 .slot-card {
-  padding: 8px 10px;
-  border-radius: 12px;
+  padding: 5px 7px;
+  border-radius: 10px;
   border-left: 2px solid rgba(17, 32, 50, 0.15);
   box-shadow: none;
 }
@@ -506,22 +506,22 @@ h1 {
 .slot-card__meta {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
 }
 
 .slot-card__title {
   margin: 0;
-  font-size: 0.74rem;
+  font-size: 0.68rem;
   font-weight: 500;
-  line-height: 1.25;
+  line-height: 1.15;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
 .slot-card__time {
-  font-size: 0.72rem;
+  font-size: 0.64rem;
   font-weight: 500;
   opacity: 0.85;
   white-space: nowrap;
@@ -530,23 +530,27 @@ h1 {
 .slot-card__details {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 6px;
+  gap: 4px;
+  margin-top: 3px;
 }
 
 .slot-pill {
   display: inline-flex;
-  padding: 3px 8px;
+  padding: 2px 6px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--surface) 72%, transparent);
-  font-size: 0.66rem;
+  font-size: 0.6rem;
   font-weight: 700;
 }
 
+.slot-pill--team {
+  letter-spacing: 0.02em;
+}
+
 .empty-state {
-  padding: 16px 14px 18px;
+  padding: 12px 10px 14px;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: 0.68rem;
   line-height: 1.35;
 }
 

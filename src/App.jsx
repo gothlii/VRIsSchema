@@ -33,6 +33,18 @@ function App() {
   const [weeks, setWeeks] = useState([]);
   const [status, setStatus] = useState({ loading: true, error: "", source: "local" });
   const [weekIndex, setWeekIndex] = useState(0);
+  const [theme, setTheme] = useState(() => {
+    if (typeof window === "undefined") {
+      return "light";
+    }
+
+    const storedTheme = window.localStorage.getItem("ice-time-theme");
+    if (storedTheme === "light" || storedTheme === "dark") {
+      return storedTheme;
+    }
+
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  });
   const [activeCategories, setActiveCategories] = useState(() =>
     new Set(CATEGORIES.map((category) => category.key))
   );
@@ -79,6 +91,11 @@ function App() {
       setWeekIndex(0);
     }
   }, [weekIndex, weeks.length]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    window.localStorage.setItem("ice-time-theme", theme);
+  }, [theme]);
 
   const currentWeek = weeks[weekIndex];
   const teams = useMemo(() => collectTeams(weeks), [weeks]);
@@ -165,6 +182,15 @@ function App() {
             <strong>{status.source === "supabase" ? "Supabase" : "Lokal fallback"}</strong>
             <span className="badge-meta">Schema redo for GitHub Pages</span>
           </div>
+
+          <button
+            className="theme-toggle"
+            type="button"
+            onClick={() => setTheme((currentTheme) => (currentTheme === "dark" ? "light" : "dark"))}
+            aria-label="Byt tema"
+          >
+            {theme === "dark" ? "Light mode" : "Dark mode"}
+          </button>
         </div>
         {status.error ? <p className="status-banner">{status.error}</p> : null}
       </header>

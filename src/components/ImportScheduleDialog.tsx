@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { type WeekSchedule, days as weekDays } from "@/data/schedule";
+import { days as weekDays, type SlotCategory, type WeekSchedule } from "@/data/schedule";
 import { Plus, Copy, Check } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { createWeek, hasRemoteStore } from "@/lib/weeksStore";
@@ -19,138 +19,123 @@ type Props = {
   onImport: (label: string, data: WeekSchedule, id: string, sortOrder: number) => void;
 };
 
-const SQL_EXAMPLE = `INSERT INTO weeks (label, sort_order, data) VALUES (
-  'Vecka 24',
-  100,
-  '{
-    "Mandag": [
-      {"start":"16:00","end":"17:00","activity":"VR A-lag"},
-      {"start":"17:00","end":"17:15","activity":"Spolning"},
-      {"start":"17:15","end":"18:15","activity":"U13","category":"team"}
-    ],
-    "Tisdag": [],
-    "Onsdag": [],
-    "Torsdag": [],
-    "Fredag": [],
-    "Lordag": [],
-    "Sondag": []
-  }'
-);`;
+const XML_EXAMPLE = `<week label="Vecka 27" sortOrder="27">
+  <day name="Måndag">
+    <slot start="08:00" end="14:00" category="booking">BOKNINGSBAR</slot>
+    <slot start="14:00" end="15:00" category="public">Allmänhet (med klubba/puck)</slot>
+    <slot start="15:00" end="15:50" category="public">Allmänhet (utan klubba/puck)</slot>
+    <slot start="15:50" end="16:00" category="maintenance">Spolning</slot>
+  </day>
+  <day name="Tisdag">
+    <slot start="08:00" end="14:00" category="booking">BOKNINGSBAR</slot>
+    <slot start="14:00" end="15:00" category="public">Allmänhet (utan klubba/puck)</slot>
+  </day>
+</week>`;
 
-type ParsedInsert = {
+type ParsedWeek = {
   label: string;
-  sort_order: number | null;
+  sort_order: number;
   data: WeekSchedule;
 };
 
-function parseInsertStatement(raw: string): ParsedInsert | string {
-  const sql = raw.trim().replace(/;$/, "").trim();
+const xmlDayAliases: Record<string, string> = {
+  mandag: weekDays[0],
+  tisdag: weekDays[1],
+  onsdag: weekDays[2],
+  torsdag: weekDays[3],
+  fredag: weekDays[4],
+  lordag: weekDays[5],
+  sondag: weekDays[6],
+};
 
-  const m = sql.match(/^insert\s+into\s+(?:public\.)?weeks\s*\(([^)]+)\)\s*values\s*\(([\s\S]+)\)\s*$/i);
-  if (!m) {
-    return "Forvantade en sats pa formen: INSERT INTO weeks (label, sort_order, data) VALUES (...);";
+function normalizeDayName(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z]/g, "")
+    .toLowerCase();
+}
+
+function resolveDayName(dayName: string) {
+  const normalized = normalizeDayName(dayName);
+  const aliasedDay = xmlDayAliases[normalized];
+  if (aliasedDay) {
+    return aliasedDay;
   }
 
-  const cols = m[1].split(",").map((c) => c.trim().toLowerCase().replace(/^"|"$/g, ""));
-  const valuesRaw = m[2];
-  const tokens: string[] = [];
-  let i = 0;
+  return dayName;
+}
 
-  while (i < valuesRaw.length) {
-    const ch = valuesRaw[i];
-    if (ch === " " || ch === "\n" || ch === "\t" || ch === "\r" || ch === ",") {
-      i++;
-      continue;
+function isSlotCategory(value: string): value is SlotCategory {
+  return ["booking", "public", "team", "maintenance", "match", "school", "event"].includes(value);
+}
+
+function parseWeekXml(raw: string): ParsedWeek | string {
+  const parser = new DOMParser();
+  const xml = parser.parseFromString(raw.trim(), "application/xml");
+  const parseError = xml.querySelector("parsererror");
+
+  if (parseError) {
+    return "XML-koden kunde inte lasas. Kontrollera att alla taggar ar stangda korrekt.";
+  }
+
+  const week = xml.querySelector("week");
+  if (!week) {
+    return "Saknar <week>-tagg i XML-importen.";
+  }
+
+  const label = week.getAttribute("label")?.trim();
+  if (!label) {
+    return "Attributet label saknas pa <week>.";
+  }
+
+  const sortOrderRaw = week.getAttribute("sortOrder")?.trim();
+  const sort_order = sortOrderRaw ? parseInt(sortOrderRaw, 10) : NaN;
+  if (Number.isNaN(sort_order)) {
+    return "Attributet sortOrder pa <week> maste vara ett heltal.";
+  }
+
+  const data: WeekSchedule = {};
+  for (const day of weekDays) data[day] = [];
+
+  const dayElements = Array.from(week.querySelectorAll(":scope > day"));
+  if (dayElements.length === 0) {
+    return "XML-importen innehaller inga <day>-element.";
+  }
+
+  for (const dayElement of dayElements) {
+    const rawDayName = dayElement.getAttribute("name")?.trim();
+    if (!rawDayName) {
+      return "Ett <day>-element saknar attributet name.";
     }
 
-    if (ch === "'") {
-      let s = "";
-      i++;
-      while (i < valuesRaw.length) {
-        if (valuesRaw[i] === "'" && valuesRaw[i + 1] === "'") {
-          s += "'";
-          i += 2;
-        } else if (valuesRaw[i] === "'") {
-          i++;
-          break;
-        } else {
-          s += valuesRaw[i];
-          i++;
-        }
+    const resolvedDayName = resolveDayName(rawDayName);
+    const slots = Array.from(dayElement.querySelectorAll(":scope > slot")).map((slotElement) => {
+      const start = slotElement.getAttribute("start")?.trim();
+      const end = slotElement.getAttribute("end")?.trim();
+      const category = slotElement.getAttribute("category")?.trim() ?? undefined;
+      const activity = slotElement.textContent?.trim() ?? "";
+
+      if (!start || !end || !activity) {
+        throw new Error(`Pass under "${rawDayName}" saknar start, end eller textinnehall.`);
       }
-      if (valuesRaw.slice(i, i + 2) === "::") {
-        i += 2;
-        while (i < valuesRaw.length && /[a-zA-Z0-9_]/.test(valuesRaw[i])) i++;
+
+      if (category && !isSlotCategory(category)) {
+        throw new Error(`Ogiltig kategori "${category}" under "${rawDayName}".`);
       }
-      tokens.push(s);
-      continue;
-    }
 
-    if (/[0-9-]/.test(ch)) {
-      let n = "";
-      while (i < valuesRaw.length && /[0-9.-]/.test(valuesRaw[i])) {
-        n += valuesRaw[i];
-        i++;
-      }
-      tokens.push(n);
-      continue;
-    }
+      return {
+        start,
+        end,
+        activity,
+        ...(category ? { category } : {}),
+      };
+    });
 
-    if (/[a-zA-Z]/.test(ch)) {
-      let w = "";
-      while (i < valuesRaw.length && /[a-zA-Z_]/.test(valuesRaw[i])) {
-        w += valuesRaw[i];
-        i++;
-      }
-      tokens.push(w);
-      continue;
-    }
-
-    i++;
+    data[resolvedDayName] = slots;
   }
 
-  if (tokens.length !== cols.length) {
-    return `Antal kolumner (${cols.length}) matchar inte antal varden (${tokens.length}).`;
-  }
-
-  const row: Record<string, string> = {};
-  cols.forEach((c, idx) => {
-    row[c] = tokens[idx];
-  });
-
-  if (!row.label) return "Saknar kolumnen 'label'.";
-  if (!row.data) return "Saknar kolumnen 'data'.";
-
-  let data: WeekSchedule;
-  try {
-    data = JSON.parse(row.data);
-  } catch (error) {
-    return "Kolumnen 'data' ar inte giltig JSON: " + (error as Error).message;
-  }
-
-  for (const [day, slots] of Object.entries(data)) {
-    if (!Array.isArray(slots)) {
-      return `Dagen "${day}" ar inte en array.`;
-    }
-    for (const slot of slots) {
-      if (!slot || typeof slot !== "object" || !("start" in slot) || !("end" in slot) || !("activity" in slot)) {
-        return `Ett pass under "${day}" saknar start/end/activity.`;
-      }
-    }
-  }
-
-  const filled: WeekSchedule = {};
-  for (const d of weekDays) filled[d] = data[d] || [];
-  for (const [k, v] of Object.entries(data)) {
-    if (!(k in filled)) filled[k] = v;
-  }
-
-  const sort_order =
-    row.sort_order && row.sort_order.toLowerCase() !== "null"
-      ? parseInt(row.sort_order, 10)
-      : null;
-
-  return { label: row.label, sort_order, data: filled };
+  return { label, sort_order, data };
 }
 
 export function ImportScheduleDialog({ onImport }: Props) {
@@ -162,7 +147,7 @@ export function ImportScheduleDialog({ onImport }: Props) {
 
   const handleImport = async () => {
     setError("");
-    const parsed = parseInsertStatement(code);
+    const parsed = parseWeekXml(code);
     if (typeof parsed === "string") {
       setError(parsed);
       return;
@@ -177,7 +162,7 @@ export function ImportScheduleDialog({ onImport }: Props) {
     try {
       const created = await createWeek({
         label: parsed.label,
-        sort_order: parsed.sort_order ?? 999,
+        sort_order: parsed.sort_order,
         data: JSON.parse(JSON.stringify(parsed.data)),
       });
       onImport(created.label, created.data, created.id, created.sort_order);
@@ -192,7 +177,7 @@ export function ImportScheduleDialog({ onImport }: Props) {
   };
 
   const copyExample = async () => {
-    await navigator.clipboard.writeText(SQL_EXAMPLE);
+    await navigator.clipboard.writeText(XML_EXAMPLE);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
@@ -207,12 +192,12 @@ export function ImportScheduleDialog({ onImport }: Props) {
       </DialogTrigger>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Importera vecka</DialogTitle>
+          <DialogTitle>Importera vecka fran XML</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-4">
           <div>
             <div className="mb-1 flex items-center justify-between">
-              <label className="block text-sm font-medium text-foreground">Importformat</label>
+              <label className="block text-sm font-medium text-foreground">XML-format</label>
               <button
                 type="button"
                 onClick={copyExample}
@@ -223,18 +208,18 @@ export function ImportScheduleDialog({ onImport }: Props) {
               </button>
             </div>
             <Textarea
-              placeholder={SQL_EXAMPLE}
+              placeholder={XML_EXAMPLE}
               value={code}
               onChange={(e) => {
                 setCode(e.target.value);
                 setError("");
               }}
-              rows={14}
+              rows={18}
               className="font-mono text-xs"
             />
             <p className="mt-2 text-xs text-muted-foreground">
-              Forvantat format: <code className="rounded bg-muted px-1">INSERT INTO weeks (label, sort_order, data) VALUES (...);</code>
-              {" "}Kolumnen <code>data</code> ska vara JSON med veckodagar som nycklar.
+              Forvantat format: <code className="rounded bg-muted px-1">{`<week label="Vecka 27" sortOrder="27">...</week>`}</code>
+              {" "}med <code>day</code>- och <code>slot</code>-taggar enligt XML-strukturen ovan.
             </p>
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
@@ -244,7 +229,7 @@ export function ImportScheduleDialog({ onImport }: Props) {
             <Button variant="outline">Avbryt</Button>
           </DialogClose>
           <Button onClick={handleImport} disabled={!code.trim() || busy}>
-            {busy ? "Importerar..." : "Importera"}
+            {busy ? "Importerar..." : "Importera XML"}
           </Button>
         </DialogFooter>
       </DialogContent>

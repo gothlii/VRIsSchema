@@ -19,11 +19,12 @@ type LegendProps = {
   activeCategories: Set<SlotCategory>;
   onToggle: (cat: SlotCategory) => void;
   onShowAll: () => void;
+  onShowAllTeams: () => void;
   teamFilter: TeamFilter;
   onTeamFilter: (team: TeamFilter) => void;
 };
 
-export function Legend({ activeCategories, onToggle, onShowAll, teamFilter, onTeamFilter }: LegendProps) {
+export function Legend({ activeCategories, onToggle, onShowAll, onShowAllTeams, teamFilter, onTeamFilter }: LegendProps) {
   const allActive = activeCategories.size === items.length && !teamFilter;
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -96,10 +97,7 @@ export function Legend({ activeCategories, onToggle, onShowAll, teamFilter, onTe
                 <div className="absolute left-0 top-full z-[100] mt-1 min-w-[140px] rounded-md border border-border bg-popover p-1 shadow-lg">
                   <button
                     onClick={() => {
-                      onTeamFilter(null);
-                      if (!(activeCategories.size === 1 && activeCategories.has("team"))) {
-                        onToggle("team");
-                      }
+                      onShowAllTeams();
                       setDropdownOpen(false);
                     }}
                     className={`w-full rounded-sm px-3 py-1.5 text-left text-xs font-medium transition-colors hover:bg-accent hover:text-accent-foreground ${

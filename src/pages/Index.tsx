@@ -158,6 +158,10 @@ const Index = () => {
     updateParams({ cats: null, team: null });
   };
 
+  const showAllTeams = () => {
+    updateParams({ cats: "team", team: null });
+  };
+
   const handleImport = (label: string, data: WeekSchedule, id: string, sort_order: number) => {
     const newWeek: WeekRow = { id, label, data, sort_order };
     setWeeksList((prev) => [...prev, newWeek].sort((a, b) => compareWeekLabels(a.label, b.label)));
@@ -516,13 +520,14 @@ const Index = () => {
             </div>
           </div>
           <div className="mt-4">
-            <Legend
-              activeCategories={activeCategories}
-              onToggle={toggleCategory}
-              onShowAll={showAllCategories}
-              teamFilter={teamFilter}
-              onTeamFilter={setTeamFilter}
-            />
+              <Legend
+                activeCategories={activeCategories}
+                onToggle={toggleCategory}
+                onShowAll={showAllCategories}
+                onShowAllTeams={showAllTeams}
+                teamFilter={teamFilter}
+                onTeamFilter={setTeamFilter}
+              />
           </div>
         </div>
       </header>

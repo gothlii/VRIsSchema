@@ -270,7 +270,7 @@ export function TimelineDay({
           return (
             <div
               key={`${slot.start}-${i}`}
-              className={`absolute left-1 right-1 select-none overflow-hidden rounded-md px-2 py-1 shadow-sm ${categoryStyles[cat]} ${
+              className={`absolute left-1 right-1 select-none ${isEditing ? "overflow-visible" : "overflow-hidden"} rounded-md px-2 py-1 shadow-sm ${categoryStyles[cat]} ${
                 isMaintenance ? "text-[10px] opacity-70" : "text-xs"
               } ${isPreviewSlot && !isMovingAway ? "ring-2 ring-primary z-30" : ""} ${
                 isMovingAway ? "opacity-30" : ""

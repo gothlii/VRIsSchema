@@ -20,7 +20,9 @@ import { compareWeekLabels, extractWeekNumber, getCurrentDayIndexForWeek, getIso
 import {
   deleteWeek,
   fetchWeeks as fetchRemoteWeeks,
+  fetchStandardWeek,
   hasRemoteStore,
+  saveStandardWeek,
   type WeekRow,
   updateWeekData,
 } from "@/lib/weeksStore";
@@ -38,6 +40,7 @@ const fallbackWeeksList: WeekRow[] = weeks.map((week, index) => ({
 const Index = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [weeksList, setWeeksList] = useState<WeekRow[]>([]);
+  const [standardWeek, setStandardWeek] = useState<WeekRow | null>(null);
   const [loading, setLoading] = useState(true);
   const { isAdmin } = useAdmin();
   const isMobile = useIsMobile();
@@ -117,7 +120,11 @@ const Index = () => {
       }
 
       try {
-        const remoteWeeks = await fetchRemoteWeeks();
+        const [remoteWeeks, templateWeek] = await Promise.all([
+          fetchRemoteWeeks(),
+          fetchStandardWeek(),
+        ]);
+        setStandardWeek(templateWeek);
         const sortedWeeks = (remoteWeeks.length > 0 ? remoteWeeks : fallbackWeeksList)
           .slice()
           .sort((a, b) => compareWeekLabels(a.label, b.label));
@@ -166,6 +173,25 @@ const Index = () => {
     const newWeek: WeekRow = { id, label, data, sort_order };
     setWeeksList((prev) => [...prev, newWeek].sort((a, b) => compareWeekLabels(a.label, b.label)));
     updateParams({ w: label });
+  };
+
+  const handleSaveStandardWeek = async () => {
+    if (!week || !hasRemoteStore) return;
+    try {
+      const saved = await saveStandardWeek({
+        label: `Standardvecka (${week.label})`,
+        data: JSON.parse(JSON.stringify(week.data)),
+        sort_order: week.sort_order,
+      });
+      setStandardWeek(saved);
+      toast({ title: "Standardvecka sparad", description: saved.label });
+    } catch (error) {
+      toast({
+        title: "Kunde inte spara standardveckan",
+        description: error instanceof Error ? error.message : "Okant fel",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleRemove = async (i: number) => {
@@ -483,6 +509,26 @@ const Index = () => {
                   onCopied={handleImport}
                 />
               )}
+              {isAdmin && hasRemoteStore && week ? (
+                <button
+                  onClick={handleSaveStandardWeek}
+                  className="flex items-center gap-1 rounded-md bg-secondary px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                  title="Spara aktuell vecka som standardvecka"
+                >
+                  Standardvecka
+                </button>
+              ) : null}
+              {isAdmin && hasRemoteStore && standardWeek ? (
+                <CopyWeekDialog
+                  sourceLabel={standardWeek.label}
+                  sourceData={standardWeek.data}
+                  existingLabels={weeksList.map((w) => w.label)}
+                  onCopied={handleImport}
+                  triggerLabel="Ny vecka fran standard"
+                  titlePrefix="Skapa vecka fran"
+                  helperText={`En ny vecka skapas fran ${standardWeek.label}. Du kan redigera den efterat.`}
+                />
+              ) : null}
               {isAdmin && hasRemoteStore && (
                 <button
                   onClick={handleUndo}

@@ -295,7 +295,7 @@ export function TimelineDay({
                 <div className="min-w-0 flex-1">
                   {isEditing ? (
                     <div
-                      className="flex flex-col gap-1 rounded-md bg-background/90 p-1 text-foreground shadow-lg"
+                      className="absolute left-0 top-0 z-50 flex w-[240px] flex-col gap-1 rounded-md border border-border bg-background/95 p-2 text-foreground shadow-xl md:w-[320px]"
                       onPointerDown={(e) => e.stopPropagation()}
                     >
                       <input

@@ -21,9 +21,20 @@ type Props = {
   sourceData: WeekSchedule;
   existingLabels: string[];
   onCopied: (label: string, data: WeekSchedule, id: string, sortOrder: number) => void;
+  triggerLabel?: string;
+  titlePrefix?: string;
+  helperText?: string;
 };
 
-export function CopyWeekDialog({ sourceLabel, sourceData, existingLabels, onCopied }: Props) {
+export function CopyWeekDialog({
+  sourceLabel,
+  sourceData,
+  existingLabels,
+  onCopied,
+  triggerLabel = "Kopiera vecka",
+  titlePrefix = "Kopiera",
+  helperText,
+}: Props) {
   const [open, setOpen] = useState(false);
   const [weekNumber, setWeekNumber] = useState("");
   const [busy, setBusy] = useState(false);
@@ -79,12 +90,12 @@ export function CopyWeekDialog({ sourceLabel, sourceData, existingLabels, onCopi
           title={`Kopiera ${sourceLabel} till ny vecka`}
         >
           <Copy className="h-4 w-4" />
-          Kopiera vecka
+          {triggerLabel}
         </button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Kopiera {sourceLabel}</DialogTitle>
+          <DialogTitle>{titlePrefix} {sourceLabel}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
@@ -100,7 +111,7 @@ export function CopyWeekDialog({ sourceLabel, sourceData, existingLabels, onCopi
               autoFocus
             />
             <p className="text-xs text-muted-foreground">
-              En ny vecka skapas med samma pass som {sourceLabel}. Du kan redigera den efterat.
+              {helperText ?? `En ny vecka skapas med samma pass som ${sourceLabel}. Du kan redigera den efterat.`}
             </p>
           </div>
           <DialogFooter>

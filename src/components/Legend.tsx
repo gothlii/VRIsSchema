@@ -3,14 +3,13 @@ import { type SlotCategory } from "@/data/schedule";
 import { type TeamFilter } from "@/lib/scheduleFilters";
 import { ChevronDown } from "lucide-react";
 
+const allScheduleCategories: SlotCategory[] = ["booking", "public", "team", "maintenance", "match", "school", "event"];
+
 const items: { label: string; category: SlotCategory; className: string; hasDropdown?: boolean }[] = [
-  { label: "Lagträning", category: "team", className: "bg-schedule-team", hasDropdown: true },
+  { label: "Välj lag", category: "team", className: "bg-schedule-team", hasDropdown: true },
   { label: "Allmänhet", category: "public", className: "bg-schedule-public" },
-  { label: "Match", category: "match", className: "bg-schedule-match" },
-  { label: "Hockeyskolan", category: "school", className: "bg-schedule-school" },
   { label: "Event", category: "event", className: "bg-schedule-event" },
   { label: "Bokningsbar", category: "booking", className: "bg-schedule-booking" },
-  { label: "Spolning", category: "maintenance", className: "bg-schedule-maintenance" },
 ];
 
 type LegendProps = {
@@ -24,7 +23,7 @@ type LegendProps = {
 };
 
 export function Legend({ activeCategories, onToggle, onShowAll, onShowAllTeams, teamFilter, teamOptions, onTeamFilter }: LegendProps) {
-  const allActive = activeCategories.size === items.length && !teamFilter;
+  const allActive = !teamFilter && allScheduleCategories.every((category) => activeCategories.has(category));
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -44,12 +43,8 @@ export function Legend({ activeCategories, onToggle, onShowAll, onShowAllTeams, 
   };
 
   const handleTeamCategoryClick = () => {
-    if (teamFilter) {
-      onTeamFilter(null);
-      onToggle("team");
-    } else {
-      onToggle("team");
-    }
+    onTeamFilter(null);
+    onShowAllTeams();
   };
 
   return (
@@ -65,7 +60,9 @@ export function Legend({ activeCategories, onToggle, onShowAll, onShowAllTeams, 
         Alla
       </button>
       {items.map((item) => {
-        const active = activeCategories.has(item.category);
+        const active = item.hasDropdown
+          ? Boolean(teamFilter) || (activeCategories.has("team") && activeCategories.has("match"))
+          : activeCategories.has(item.category);
         const isTeamWithFilter = item.category === "team" && teamFilter;
 
         if (item.hasDropdown) {
@@ -78,7 +75,10 @@ export function Legend({ activeCategories, onToggle, onShowAll, onShowAllTeams, 
                     active ? "" : "opacity-40"
                   }`}
                 >
-                  <div className={`h-3 w-3 rounded-sm ${item.className}`} />
+                  <div className="flex h-3 w-3 overflow-hidden rounded-sm">
+                    <div className="h-full flex-1 bg-schedule-team" />
+                    <div className="h-full flex-1 bg-schedule-match" />
+                  </div>
                   <span className="text-xs text-muted-foreground">
                     {isTeamWithFilter ? teamFilter : item.label}
                   </span>

@@ -332,12 +332,12 @@ function inferWeekNumber(sheetName: string, matrix: CellMatrix) {
 
 function findDayHeader(matrix: CellMatrix): { row: number; columns: DayColumn[] } | null {
   const visbyRow = matrix.findIndex((row) =>
-    row.some((cell) => normalizeText(cell).includes("visbyishall")),
+    row?.some((cell) => normalizeText(cell).includes("visbyishall")),
   );
   const startRow = Math.max(0, visbyRow);
 
   for (let rowIndex = startRow; rowIndex < matrix.length; rowIndex += 1) {
-    const columns = matrix[rowIndex]
+    const columns = (matrix[rowIndex] ?? [])
       .map((cell, col) => ({ day: resolveDayName(cell), col }))
       .filter((entry): entry is DayColumn => Boolean(entry.day));
 

@@ -46,4 +46,19 @@ describe("parseSheetSchedule", () => {
       { start: "14:00", end: "15:45", activity: "Allmänhetens åkning utan klubba/puck" },
     ]);
   });
+
+  it("skips sparse empty rows while looking for the day header", () => {
+    const matrix: string[][] = [];
+    matrix[0] = ["V.31"];
+    matrix[2] = ["", "ISSCHEMA", "VISBY ISHALL"];
+    matrix[5] = ["", "Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag", "Lördag", "Söndag"];
+    matrix[6] = ["8.00", "BOKNINGSBAR"];
+    matrix[7] = ["", "08.00-09.00"];
+
+    const parsed = parseSheetSchedule("V31", matrix);
+
+    expect(parsed?.data["Måndag"]).toEqual([
+      { start: "08:00", end: "09:00", activity: "BOKNINGSBAR" },
+    ]);
+  });
 });

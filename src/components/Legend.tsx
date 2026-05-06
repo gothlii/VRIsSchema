@@ -1,9 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { type SlotCategory } from "@/data/schedule";
+import { type TeamFilter } from "@/lib/scheduleFilters";
 import { ChevronDown } from "lucide-react";
-
-const teams = ["U8", "U9", "U10", "U11", "U12", "U13", "U14", "U15", "U16", "BJ", "VR A-lag", "Oldtimers"] as const;
-export type TeamFilter = typeof teams[number] | null;
 
 const items: { label: string; category: SlotCategory; className: string; hasDropdown?: boolean }[] = [
   { label: "Lagträning", category: "team", className: "bg-schedule-team", hasDropdown: true },
@@ -21,10 +19,11 @@ type LegendProps = {
   onShowAll: () => void;
   onShowAllTeams: () => void;
   teamFilter: TeamFilter;
+  teamOptions: string[];
   onTeamFilter: (team: TeamFilter) => void;
 };
 
-export function Legend({ activeCategories, onToggle, onShowAll, onShowAllTeams, teamFilter, onTeamFilter }: LegendProps) {
+export function Legend({ activeCategories, onToggle, onShowAll, onShowAllTeams, teamFilter, teamOptions, onTeamFilter }: LegendProps) {
   const allActive = activeCategories.size === items.length && !teamFilter;
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -39,7 +38,7 @@ export function Legend({ activeCategories, onToggle, onShowAll, onShowAllTeams, 
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  const handleTeamSelect = (team: typeof teams[number]) => {
+  const handleTeamSelect = (team: string) => {
     onTeamFilter(team);
     setDropdownOpen(false);
   };
@@ -106,17 +105,21 @@ export function Legend({ activeCategories, onToggle, onShowAll, onShowAllTeams, 
                   >
                     Alla lag
                   </button>
-                  {teams.map((team) => (
-                    <button
-                      key={team}
-                      onClick={() => handleTeamSelect(team)}
-                      className={`w-full rounded-sm px-3 py-1.5 text-left text-xs transition-colors hover:bg-accent hover:text-accent-foreground ${
-                        teamFilter === team ? "bg-accent/50 font-medium text-accent-foreground" : "text-popover-foreground"
-                      }`}
-                    >
-                      {team}
-                    </button>
-                  ))}
+                  {teamOptions.length > 0 ? (
+                    teamOptions.map((team) => (
+                      <button
+                        key={team}
+                        onClick={() => handleTeamSelect(team)}
+                        className={`w-full rounded-sm px-3 py-1.5 text-left text-xs transition-colors hover:bg-accent hover:text-accent-foreground ${
+                          teamFilter === team ? "bg-accent/50 font-medium text-accent-foreground" : "text-popover-foreground"
+                        }`}
+                      >
+                        {team}
+                      </button>
+                    ))
+                  ) : (
+                    <div className="px-3 py-1.5 text-xs text-muted-foreground">Inga lag i veckan</div>
+                  )}
                 </div>
               )}
             </div>

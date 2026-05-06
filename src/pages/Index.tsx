@@ -3,7 +3,6 @@ import { useSearchParams } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { days, weeks, type SlotCategory, type WeekSchedule, type TimeSlot } from "@/data/schedule";
 import { DayColumn } from "@/components/DayColumn";
-import { type TeamFilter } from "@/components/Legend";
 import { Legend } from "@/components/Legend";
 import { AdminButton } from "@/components/AdminButton";
 import { useAdmin } from "@/contexts/AdminContext";
@@ -15,6 +14,7 @@ import { toast } from "@/hooks/use-toast";
 import { downloadWeekXml } from "@/lib/exportScheduleXml";
 import { TimelineDay, TIMELINE_PX_PER_MIN } from "@/components/TimelineDay";
 import { resizeSlot, moveSlot, moveSlotToDay, insertSlot, DAY_START_MIN } from "@/lib/scheduleEdit";
+import { filterSlots, getTeamFilterOptions, type TeamFilter } from "@/lib/scheduleFilters";
 import { useTheme } from "@/hooks/useTheme";
 import { compareWeekLabels, extractWeekNumber, getCurrentDayIndexForWeek, getIsoWeek, getWeekDateLabels } from "@/lib/weekCalendar";
 import {
@@ -28,7 +28,6 @@ import {
 } from "@/lib/weeksStore";
 
 const allCategories: SlotCategory[] = ["booking", "public", "team", "maintenance", "match", "school", "event"];
-const allTeams = ["U8", "U9", "U10", "U11", "U12", "U13", "U14", "U15", "U16", "BJ", "VR A-lag", "Oldtimers"];
 
 const fallbackWeeksList: WeekRow[] = weeks.map((week, index) => ({
   id: `fallback-${index + 1}`,
@@ -64,7 +63,7 @@ const Index = () => {
   }, [catsParam]);
 
   const teamParam = searchParams.get("team");
-  const teamFilter: TeamFilter = (teamParam && allTeams.includes(teamParam) ? teamParam : null) as TeamFilter;
+  const teamFilter: TeamFilter = teamParam || null;
 
   const dayParam = searchParams.get("d");
   const selectedDay = useMemo(() => {
@@ -91,6 +90,7 @@ const Index = () => {
   const setTeamFilter = (t: TeamFilter) => updateParams({ team: t });
 
   const week = weeksList[weekIdx];
+  const teamOptions = useMemo(() => getTeamFilterOptions(week?.data), [week]);
   const weekDateLabels = useMemo(
     () => (week ? getWeekDateLabels(week.label, days.length) : Array.from({ length: days.length }, () => "")),
     [week],
@@ -153,6 +153,13 @@ const Index = () => {
     }
   }, [weekParam, weeksList, updateParams]);
 
+  useEffect(() => {
+    if (!week || !teamFilter) return;
+    if (!teamOptions.includes(teamFilter)) {
+      updateParams({ team: null });
+    }
+  }, [teamFilter, teamOptions, updateParams, week]);
+
   const toggleCategory = (cat: SlotCategory) => {
     if (activeCategories.size === 1 && activeCategories.has(cat)) {
       updateParams({ cats: null });
@@ -166,7 +173,7 @@ const Index = () => {
   };
 
   const showAllTeams = () => {
-    updateParams({ cats: "team", team: null });
+    updateParams({ cats: "team,match", team: null });
   };
 
   const handleImport = (label: string, data: WeekSchedule, id: string, sort_order: number) => {
@@ -572,6 +579,7 @@ const Index = () => {
                 onShowAll={showAllCategories}
                 onShowAllTeams={showAllTeams}
                 teamFilter={teamFilter}
+                teamOptions={teamOptions}
                 onTeamFilter={setTeamFilter}
               />
           </div>
@@ -643,25 +651,31 @@ const Index = () => {
               ) : (
                 isAdmin && hasRemoteStore ? (
                   <div className="grid grid-cols-7 gap-2">
-                    {days.map((day) => (
-                      <TimelineDay
-                        key={day}
-                        day={day}
-                        dateLabel={weekDateLabels[days.indexOf(day)]}
-                        isToday={currentDayIndex === days.indexOf(day)}
-                        slots={week.data[day] || []}
-                        isAdmin={isAdmin}
-                        onRemoveSlot={(idx) => handleRemoveSlot(day, idx)}
-                        onResize={(idx, s, e) => handleResizeSlot(day, idx, s, e)}
-                        onMove={(idx, s) => handleMoveSlot(day, idx, s)}
-                        onMoveToDay={(idx, toDay, s) => handleMoveSlotToDay(day, idx, toDay, s)}
-                        onCreate={(s, e) => handleCreateSlot(day, s, e)}
-                        onRenameSlot={(idx, value) => handleRenameSlot(day, idx, value)}
-                        onChangeCategory={(idx, category) => handleChangeCategory(day, idx, category)}
-                        registerColumn={registerColumn}
-                        getDayAtPoint={getDayAtPoint}
-                      />
-                    ))}
+                    {days.map((day) => {
+                      const filteredSlots = filterSlots(week.data[day] || [], activeCategories, teamFilter);
+                      const visibleSlots = filteredSlots.map(({ slot }) => slot);
+                      const resolveIndex = (idx: number) => filteredSlots[idx]?.originalIndex ?? idx;
+
+                      return (
+                        <TimelineDay
+                          key={day}
+                          day={day}
+                          dateLabel={weekDateLabels[days.indexOf(day)]}
+                          isToday={currentDayIndex === days.indexOf(day)}
+                          slots={visibleSlots}
+                          isAdmin={isAdmin}
+                          onRemoveSlot={(idx) => handleRemoveSlot(day, resolveIndex(idx))}
+                          onResize={(idx, s, e) => handleResizeSlot(day, resolveIndex(idx), s, e)}
+                          onMove={(idx, s) => handleMoveSlot(day, resolveIndex(idx), s)}
+                          onMoveToDay={(idx, toDay, s) => handleMoveSlotToDay(day, resolveIndex(idx), toDay, s)}
+                          onCreate={(s, e) => handleCreateSlot(day, s, e)}
+                          onRenameSlot={(idx, value) => handleRenameSlot(day, resolveIndex(idx), value)}
+                          onChangeCategory={(idx, category) => handleChangeCategory(day, resolveIndex(idx), category)}
+                          registerColumn={registerColumn}
+                          getDayAtPoint={getDayAtPoint}
+                        />
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="grid grid-cols-7 gap-2">

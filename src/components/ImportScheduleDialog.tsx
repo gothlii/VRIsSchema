@@ -10,10 +10,14 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { days as weekDays, type SlotCategory, type WeekSchedule } from "@/data/schedule";
-import { Plus, Copy, Check } from "lucide-react";
+import { Plus, Copy, Check, FileSpreadsheet } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { createWeek, hasRemoteStore } from "@/lib/weeksStore";
+import { parseScheduleExcelWorkbook, type ParsedExcelWeek } from "@/lib/parseExcelSchedule";
 
 type Props = {
   onImport: (label: string, data: WeekSchedule, id: string, sortOrder: number) => void;
@@ -140,19 +144,18 @@ function parseWeekXml(raw: string): ParsedWeek | string {
 
 export function ImportScheduleDialog({ onImport }: Props) {
   const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<"excel" | "xml">("excel");
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [excelFileName, setExcelFileName] = useState("");
+  const [excelWeeks, setExcelWeeks] = useState<ParsedExcelWeek[]>([]);
+  const [selectedExcelSheet, setSelectedExcelSheet] = useState("");
 
-  const handleImport = async () => {
-    setError("");
-    const parsed = parseWeekXml(code);
-    if (typeof parsed === "string") {
-      setError(parsed);
-      return;
-    }
+  const selectedExcelWeek = excelWeeks.find((week) => week.sheetName === selectedExcelSheet);
 
+  const saveParsedWeek = async (parsed: ParsedWeek, successTitle: string) => {
     if (!hasRemoteStore) {
       setError("Firebase ar inte konfigurerat. Lagg in Firebase-nycklar i GitHub och lokalt.");
       return;
@@ -166,14 +169,56 @@ export function ImportScheduleDialog({ onImport }: Props) {
         data: JSON.parse(JSON.stringify(parsed.data)),
       });
       onImport(created.label, created.data, created.id, created.sort_order);
-      toast({ title: "Vecka importerad", description: created.label });
+      toast({ title: successTitle, description: created.label });
       setCode("");
+      setExcelFileName("");
+      setExcelWeeks([]);
+      setSelectedExcelSheet("");
       setOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Kunde inte spara veckan.");
     } finally {
       setBusy(false);
     }
+  };
+
+  const handleImportXml = async () => {
+    setError("");
+    const parsed = parseWeekXml(code);
+    if (typeof parsed === "string") {
+      setError(parsed);
+      return;
+    }
+
+    await saveParsedWeek(parsed, "Vecka importerad");
+  };
+
+  const handleExcelFile = async (file: File | undefined) => {
+    setError("");
+    setExcelFileName(file?.name ?? "");
+    setExcelWeeks([]);
+    setSelectedExcelSheet("");
+
+    if (!file) return;
+
+    try {
+      const weeks = await parseScheduleExcelWorkbook(await file.arrayBuffer());
+      setExcelWeeks(weeks);
+      setSelectedExcelSheet(weeks[0]?.sheetName ?? "");
+      toast({ title: "Excel-fil inläst", description: `${weeks.length} veckor hittades.` });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Kunde inte läsa Excel-filen.");
+    }
+  };
+
+  const handleImportExcel = async () => {
+    setError("");
+    if (!selectedExcelWeek) {
+      setError("Välj vilken flik/vecka som ska importeras.");
+      return;
+    }
+
+    await saveParsedWeek(selectedExcelWeek, "Excel-vecka importerad");
   };
 
   const copyExample = async () => {
@@ -192,10 +237,74 @@ export function ImportScheduleDialog({ onImport }: Props) {
       </DialogTrigger>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Importera vecka fran XML</DialogTitle>
+          <DialogTitle>Lägg till vecka</DialogTitle>
         </DialogHeader>
-        <div className="flex flex-col gap-4">
-          <div>
+
+        <Tabs value={mode} onValueChange={(value) => setMode(value as "excel" | "xml")} className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="excel">Excel</TabsTrigger>
+            <TabsTrigger value="xml">XML</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="excel" className="mt-4 space-y-4">
+            <div className="space-y-2">
+              <label htmlFor="excel-file" className="block text-sm font-medium text-foreground">
+                Excel-fil
+              </label>
+              <Input
+                id="excel-file"
+                type="file"
+                accept=".xlsx,.xlsm"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  void handleExcelFile(file);
+                  event.currentTarget.value = "";
+                }}
+                disabled={busy}
+              />
+              {excelFileName && (
+                <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <FileSpreadsheet className="h-3 w-3" />
+                  {excelFileName}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-foreground">Vecka</label>
+              <Select value={selectedExcelSheet} onValueChange={setSelectedExcelSheet} disabled={excelWeeks.length === 0 || busy}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Välj vecka från Excel-filen" />
+                </SelectTrigger>
+                <SelectContent>
+                  {excelWeeks.map((week) => (
+                    <SelectItem key={week.sheetName} value={week.sheetName}>
+                      {week.label} ({week.sheetName})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {selectedExcelWeek && (
+              <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                <div className="font-medium text-foreground">
+                  {selectedExcelWeek.label}
+                  {selectedExcelWeek.dateRange ? `, ${selectedExcelWeek.dateRange}` : ""}
+                </div>
+                <div className="text-muted-foreground">
+                  {selectedExcelWeek.slotCount} pass hittades på fliken {selectedExcelWeek.sheetName}.
+                </div>
+                {selectedExcelWeek.warnings.map((warning) => (
+                  <div key={warning} className="mt-1 text-destructive">
+                    {warning}
+                  </div>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="xml" className="mt-4">
             <div className="mb-1 flex items-center justify-between">
               <label className="block text-sm font-medium text-foreground">XML-format</label>
               <button
@@ -221,15 +330,21 @@ export function ImportScheduleDialog({ onImport }: Props) {
               Forvantat format: <code className="rounded bg-muted px-1">{`<week label="Vecka 27" sortOrder="27">...</week>`}</code>
               {" "}med <code>day</code>- och <code>slot</code>-taggar enligt XML-strukturen ovan.
             </p>
-          </div>
+          </TabsContent>
+        </Tabs>
+
+        <div className="flex flex-col gap-4">
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
         <DialogFooter>
           <DialogClose asChild>
             <Button variant="outline">Avbryt</Button>
           </DialogClose>
-          <Button onClick={handleImport} disabled={!code.trim() || busy}>
-            {busy ? "Importerar..." : "Importera XML"}
+          <Button
+            onClick={mode === "excel" ? handleImportExcel : handleImportXml}
+            disabled={busy || (mode === "excel" ? !selectedExcelWeek : !code.trim())}
+          >
+            {busy ? "Importerar..." : mode === "excel" ? "Importera Excel-vecka" : "Importera XML"}
           </Button>
         </DialogFooter>
       </DialogContent>

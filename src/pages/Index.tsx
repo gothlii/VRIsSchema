@@ -13,7 +13,17 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "@/hooks/use-toast";
 import { downloadWeekXml } from "@/lib/exportScheduleXml";
 import { TimelineDay, TIMELINE_PX_PER_MIN } from "@/components/TimelineDay";
-import { resizeSlot, moveSlot, moveSlotToDay, insertSlot, DAY_START_MIN } from "@/lib/scheduleEdit";
+import {
+  BOOKABLE_ACTIVITY,
+  DAY_START_MIN,
+  getGapActivity,
+  insertSlot,
+  moveSlot,
+  moveSlotToDay,
+  normalizeShortBookablePausesInWeek,
+  resizeSlot,
+  toMin,
+} from "@/lib/scheduleEdit";
 import { filterSlots, getTeamFilterOptions, type TeamFilter } from "@/lib/scheduleFilters";
 import { useTheme } from "@/hooks/useTheme";
 import { compareWeekLabels, extractWeekNumber, getCurrentDayIndexForWeek, getIsoWeek, getWeekDateLabels } from "@/lib/weekCalendar";
@@ -32,7 +42,7 @@ const allCategories: SlotCategory[] = ["booking", "public", "team", "maintenance
 const fallbackWeeksList: WeekRow[] = weeks.map((week, index) => ({
   id: `fallback-${index + 1}`,
   label: week.label,
-  data: week.data,
+  data: normalizeShortBookablePausesInWeek(week.data),
   sort_order: index + 1,
 })).sort((a, b) => compareWeekLabels(a.label, b.label));
 
@@ -177,7 +187,7 @@ const Index = () => {
   };
 
   const handleImport = (label: string, data: WeekSchedule, id: string, sort_order: number) => {
-    const newWeek: WeekRow = { id, label, data, sort_order };
+    const newWeek: WeekRow = { id, label, data: normalizeShortBookablePausesInWeek(data), sort_order };
     setWeeksList((prev) => [...prev, newWeek].sort((a, b) => compareWeekLabels(a.label, b.label)));
     updateParams({ w: label });
   };
@@ -232,7 +242,11 @@ const Index = () => {
 
     const daySlots = [...(currentWeek.data[day] || [])];
     const removed = daySlots[slotIndex];
-    const activity = (removed?.activity || "").toLowerCase();
+    if (!removed) return;
+    const activity = (removed.activity || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
     const isMaintenance = activity === "spolning" || activity.startsWith("isvard");
 
     let newDaySlots: TimeSlot[];
@@ -247,21 +261,25 @@ const Index = () => {
         newDaySlots = daySlots.filter((_, i) => i !== slotIndex);
       }
     } else {
-      daySlots[slotIndex] = { start: removed.start, end: removed.end, activity: "BOKNINGSBAR" };
+      daySlots[slotIndex] = {
+        start: removed.start,
+        end: removed.end,
+        activity: getGapActivity(toMin(removed.start), toMin(removed.end)),
+      };
       newDaySlots = daySlots;
     }
 
     const merged: TimeSlot[] = [];
     for (const slot of newDaySlots) {
       const last = merged[merged.length - 1];
-      if (last && last.activity === "BOKNINGSBAR" && slot.activity === "BOKNINGSBAR" && last.end === slot.start) {
+      if (last && last.activity === BOOKABLE_ACTIVITY && slot.activity === BOOKABLE_ACTIVITY && last.end === slot.start) {
         last.end = slot.end;
       } else {
         merged.push({ ...slot });
       }
     }
 
-    const newData = { ...currentWeek.data, [day]: merged };
+    const newData = normalizeShortBookablePausesInWeek({ ...currentWeek.data, [day]: merged });
 
     try {
       await updateWeekData(currentWeek.id, JSON.parse(JSON.stringify(newData)));
@@ -289,7 +307,7 @@ const Index = () => {
     const daySlots = [...(currentWeek.data[day] || [])];
     if (!daySlots[slotIndex]) return;
     daySlots[slotIndex] = { ...daySlots[slotIndex], activity: newActivity };
-    const newData = { ...currentWeek.data, [day]: daySlots };
+    const newData = normalizeShortBookablePausesInWeek({ ...currentWeek.data, [day]: daySlots });
 
     try {
       await updateWeekData(currentWeek.id, JSON.parse(JSON.stringify(newData)));
@@ -317,7 +335,7 @@ const Index = () => {
     const daySlots = [...(currentWeek.data[day] || [])];
     if (!daySlots[slotIndex]) return;
     daySlots[slotIndex] = { ...daySlots[slotIndex], category: newCategory };
-    const newData = { ...currentWeek.data, [day]: daySlots };
+    const newData = normalizeShortBookablePausesInWeek({ ...currentWeek.data, [day]: daySlots });
 
     try {
       await updateWeekData(currentWeek.id, JSON.parse(JSON.stringify(newData)));
@@ -338,13 +356,14 @@ const Index = () => {
   }, [weekIdx, weeksList]);
 
   const undoStackRef = useRef<{ weekId: string; data: WeekSchedule }[]>([]);
-  const [undoVersion, setUndoVersion] = useState(0);
+  const [, setUndoVersion] = useState(0);
   const currentWeekId = weeksList[weekIdx]?.id;
 
   const persistWeekData = useCallback(async (newData: WeekSchedule, recordUndo = true) => {
     if (!hasRemoteStore) return;
     const currentWeek = weeksList[weekIdx];
     if (!currentWeek) return;
+    const normalizedData = normalizeShortBookablePausesInWeek(newData);
 
     if (recordUndo) {
       undoStackRef.current.push({ weekId: currentWeek.id, data: currentWeek.data });
@@ -354,12 +373,12 @@ const Index = () => {
 
     setWeeksList((prev) => {
       const updated = [...prev];
-      updated[weekIdx] = { ...currentWeek, data: newData };
+      updated[weekIdx] = { ...currentWeek, data: normalizedData };
       return updated;
     });
 
     try {
-      await updateWeekData(currentWeek.id, JSON.parse(JSON.stringify(newData)));
+      await updateWeekData(currentWeek.id, JSON.parse(JSON.stringify(normalizedData)));
     } catch (error) {
       toast({
         title: "Kunde inte spara andringen",
@@ -402,10 +421,7 @@ const Index = () => {
     persistWeekData({ ...currentWeek.data, [day]: updatedDay });
   }, [weekIdx, weeksList, persistWeekData]);
 
-  const canUndo = useMemo(
-    () => undoStackRef.current.some((s) => s.weekId === currentWeekId),
-    [currentWeekId, undoVersion],
-  );
+  const canUndo = undoStackRef.current.some((s) => s.weekId === currentWeekId);
 
   const handleUndo = useCallback(() => {
     for (let i = undoStackRef.current.length - 1; i >= 0; i--) {

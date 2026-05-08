@@ -350,7 +350,7 @@ export function TimelineDay({
                         e.stopPropagation();
                         onRemoveSlot(i);
                       }}
-                      title="Ta bort pass och gor tiden bokningsbar"
+                      title="Ta bort pass och frigör tiden"
                     >
                       <X className="h-3 w-3" />
                     </button>

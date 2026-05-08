@@ -4,6 +4,9 @@ export const DAY_START_MIN = 8 * 60; // 08:00
 export const DAY_END_MIN = 24 * 60; // allow pushed slots to stay visible later in the day
 export const SNAP_MIN = 5;
 export const MIN_SLOT_LEN = 5;
+export const SHORT_PAUSE_LIMIT_MIN = 20;
+export const BOOKABLE_ACTIVITY = "BOKNINGSBAR";
+export const SHORT_PAUSE_ACTIVITY = "Isvård";
 
 export function toMin(t: string): number {
   const [h, m] = t.split(":").map(Number);
@@ -29,6 +32,33 @@ function slotDuration(slot: TimeSlot) {
   return toMin(slot.end) - toMin(slot.start);
 }
 
+export function getGapActivity(startMin: number, endMin: number) {
+  return endMin - startMin < SHORT_PAUSE_LIMIT_MIN ? SHORT_PAUSE_ACTIVITY : BOOKABLE_ACTIVITY;
+}
+
+function isBookableActivity(activity: string) {
+  return activity.trim().toUpperCase() === BOOKABLE_ACTIVITY;
+}
+
+export function normalizeShortBookablePauses(slots: TimeSlot[]) {
+  return slots.map((slot) => {
+    if (!isBookableActivity(slot.activity)) return { ...slot };
+    const activity = getGapActivity(toMin(slot.start), toMin(slot.end));
+
+    return {
+      ...slot,
+      activity,
+      ...(activity === SHORT_PAUSE_ACTIVITY ? { category: "maintenance" as const } : {}),
+    };
+  });
+}
+
+export function normalizeShortBookablePausesInWeek<T extends Record<string, TimeSlot[]>>(data: T): T {
+  return Object.fromEntries(
+    Object.entries(data).map(([day, slots]) => [day, normalizeShortBookablePauses(slots)]),
+  ) as T;
+}
+
 function mergeBookable(slots: TimeSlot[]): TimeSlot[] {
   const sorted = [...slots].sort((a, b) => toMin(a.start) - toMin(b.start));
   const out: TimeSlot[] = [];
@@ -37,8 +67,8 @@ function mergeBookable(slots: TimeSlot[]): TimeSlot[] {
     const last = out[out.length - 1];
     if (
       last &&
-      last.activity === "BOKNINGSBAR" &&
-      slot.activity === "BOKNINGSBAR" &&
+      last.activity === BOOKABLE_ACTIVITY &&
+      slot.activity === BOOKABLE_ACTIVITY &&
       last.end === slot.start
     ) {
       last.end = slot.end;
@@ -56,7 +86,7 @@ function normalizeAndFillDay(slots: TimeSlot[]) {
     .sort((a, b) => toMin(a.start) - toMin(b.start));
 
   if (sorted.length === 0) {
-    return [{ start: toTime(DAY_START_MIN), end: toTime(DAY_END_MIN), activity: "BOKNINGSBAR" }];
+    return [{ start: toTime(DAY_START_MIN), end: toTime(DAY_END_MIN), activity: BOOKABLE_ACTIVITY }];
   }
 
   const out: TimeSlot[] = [];
@@ -67,7 +97,7 @@ function normalizeAndFillDay(slots: TimeSlot[]) {
     const end = Math.max(start + MIN_SLOT_LEN, toMin(slot.end));
 
     if (start > cursor) {
-      out.push({ start: toTime(cursor), end: toTime(start), activity: "BOKNINGSBAR" });
+      out.push({ start: toTime(cursor), end: toTime(start), activity: getGapActivity(cursor, start) });
     }
 
     out.push({
@@ -80,7 +110,7 @@ function normalizeAndFillDay(slots: TimeSlot[]) {
   }
 
   if (cursor < DAY_END_MIN) {
-    out.push({ start: toTime(cursor), end: toTime(DAY_END_MIN), activity: "BOKNINGSBAR" });
+    out.push({ start: toTime(cursor), end: toTime(DAY_END_MIN), activity: getGapActivity(cursor, DAY_END_MIN) });
   }
 
   return mergeBookable(out);
@@ -117,7 +147,7 @@ function replaceWithBookable(slots: TimeSlot[], index: number) {
   arr[index] = {
     start: target.start,
     end: target.end,
-    activity: "BOKNINGSBAR",
+    activity: getGapActivity(toMin(target.start), toMin(target.end)),
   };
 
   return normalizeAndFillDay(arr);
@@ -133,8 +163,8 @@ export function resizeSlot(
   const target = arr[index];
   if (!target) return slots;
 
-  let start = Math.max(DAY_START_MIN, snap(newStartMin));
-  let end = Math.max(start + MIN_SLOT_LEN, snap(newEndMin));
+  const start = Math.max(DAY_START_MIN, snap(newStartMin));
+  const end = Math.max(start + MIN_SLOT_LEN, snap(newEndMin));
 
   const prev = arr[index - 1];
   if (prev && toMin(prev.end) > start) {
@@ -193,8 +223,8 @@ export function insertSlot(
   newEndMin: number,
   activity = "Nytt pass",
 ): TimeSlot[] {
-  let start = Math.max(DAY_START_MIN, snap(newStartMin));
-  let end = Math.max(start + MIN_SLOT_LEN, snap(newEndMin));
+  const start = Math.max(DAY_START_MIN, snap(newStartMin));
+  const end = Math.max(start + MIN_SLOT_LEN, snap(newEndMin));
 
   const arr = cloneSlots(slots).sort((a, b) => toMin(a.start) - toMin(b.start));
   arr.push({ start: toTime(start), end: toTime(end), activity });

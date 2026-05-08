@@ -14,6 +14,7 @@ import {
 } from "firebase/firestore";
 import type { WeekSchedule } from "@/data/schedule";
 import { db } from "@/lib/firebase";
+import { normalizeShortBookablePausesInWeek } from "@/lib/scheduleEdit";
 
 export type WeekRow = {
   id: string;
@@ -42,7 +43,7 @@ export async function fetchWeeks(): Promise<WeekRow[]> {
     return {
       id: entry.id,
       label: data.label,
-      data: data.data,
+      data: normalizeShortBookablePausesInWeek(data.data),
       sort_order: data.sort_order,
       created_at: data.created_at ? data.created_at.toDate().toISOString() : undefined,
       is_template: data.is_template ?? false,
@@ -51,13 +52,17 @@ export async function fetchWeeks(): Promise<WeekRow[]> {
 }
 
 export async function createWeek(input: Omit<WeekRow, "id">): Promise<WeekRow> {
-  const payload = {
+  const normalizedInput = {
     ...input,
-    is_template: input.is_template ?? false,
+    data: normalizeShortBookablePausesInWeek(input.data),
+  };
+  const payload = {
+    ...normalizedInput,
+    is_template: normalizedInput.is_template ?? false,
     created_at: serverTimestamp(),
   };
   const ref = await addDoc(weeksCollection(), payload);
-  return { id: ref.id, ...input };
+  return { id: ref.id, ...normalizedInput };
 }
 
 export async function deleteWeek(id: string): Promise<void> {
@@ -65,7 +70,7 @@ export async function deleteWeek(id: string): Promise<void> {
 }
 
 export async function updateWeekData(id: string, data: WeekSchedule): Promise<void> {
-  await updateDoc(doc(weeksCollection(), id), { data });
+  await updateDoc(doc(weeksCollection(), id), { data: normalizeShortBookablePausesInWeek(data) });
 }
 
 export async function fetchStandardWeek(): Promise<WeekRow | null> {
@@ -77,7 +82,7 @@ export async function fetchStandardWeek(): Promise<WeekRow | null> {
   return {
     id: entry.id,
     label: data.label,
-    data: data.data,
+    data: normalizeShortBookablePausesInWeek(data.data),
     sort_order: data.sort_order,
     created_at: data.created_at ? data.created_at.toDate().toISOString() : undefined,
     is_template: true,
@@ -85,16 +90,20 @@ export async function fetchStandardWeek(): Promise<WeekRow | null> {
 }
 
 export async function saveStandardWeek(input: Pick<WeekRow, "label" | "data" | "sort_order">): Promise<WeekRow> {
+  const normalizedInput = {
+    ...input,
+    data: normalizeShortBookablePausesInWeek(input.data),
+  };
   const existing = await fetchStandardWeek();
   if (existing) {
     await updateDoc(doc(weeksCollection(), existing.id), {
-      label: input.label,
-      data: input.data,
-      sort_order: input.sort_order,
+      label: normalizedInput.label,
+      data: normalizedInput.data,
+      sort_order: normalizedInput.sort_order,
       is_template: true,
     });
-    return { ...existing, ...input, is_template: true };
+    return { ...existing, ...normalizedInput, is_template: true };
   }
 
-  return createWeek({ ...input, is_template: true });
+  return createWeek({ ...normalizedInput, is_template: true });
 }

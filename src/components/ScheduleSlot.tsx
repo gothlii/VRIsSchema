@@ -133,7 +133,7 @@ export function ScheduleSlot({ slot, index, isAdmin, onRemove, onRename, onChang
             <button
               onClick={onRemove}
               className="rounded-full p-0.5 opacity-0 transition-opacity hover:text-destructive group-hover/slot:opacity-100"
-              title={isMaintenance ? "Ta bort spolning (förläng föregående pass)" : "Ta bort (gör bokningsbar)"}
+              title={isMaintenance ? "Ta bort spolning (förläng föregående pass)" : "Ta bort och frigör tiden"}
             >
               <X className="h-3 w-3" />
             </button>
